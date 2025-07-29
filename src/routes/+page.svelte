@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PUBLIC_SESSION_DOMAIN } from "$env/static/public"
+  import { env } from "$env/dynamic/public"
   import { browser } from "$app/environment"
 
   let { data } = $props()
@@ -17,7 +17,7 @@
     }
     if (!has_session) {
       const uuid = self.crypto.randomUUID()
-      document.cookie = `swarm_fm_player_session=${uuid}; domain=${PUBLIC_SESSION_DOMAIN}; expires=Fri, 31 Dec 9999 23:59:59 GMT; secure; samesite=lax`
+      document.cookie = `swarm_fm_player_session=${uuid}; domain=${env.PUBLIC_SESSION_DOMAIN}; expires=Fri, 31 Dec 9999 23:59:59 GMT; secure; samesite=lax`
       session = uuid
     }
   }
