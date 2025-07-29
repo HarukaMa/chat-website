@@ -499,9 +499,18 @@ export class DO extends DurableObject<Env> {
   }
 
   async twitch_session_check(session: string): Promise<{ name: string; name_color: string } | null> {
-    const twitch_token = await this.ctx.storage.get<TwitchUserToken>(`twitch_user_token_${session}`)
+    let twitch_token = await this.ctx.storage.get<TwitchUserToken>(`twitch_user_token_${session}`)
     if (twitch_token === undefined) {
       return null
+    }
+    if (twitch_token.expires_at < Date.now() / 1000) {
+      try {
+        twitch_token = await this.twitch_refresh_user_token(twitch_token)
+        await this.ctx.storage.put(`twitch_user_token_${session}`, twitch_token)
+      } catch (e) {
+        console.error("ERROR: failed to refresh token: ", e)
+        throw e
+      }
     }
     const name = await this.twitch_get_user_name(twitch_token, session)
     const name_color = (await this.ctx.storage.get<string>(`twitch_user_color_${name}`)) || ""
