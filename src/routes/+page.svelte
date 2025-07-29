@@ -26,26 +26,25 @@
     }
   }
 
-  const twitch_login_url = `https://id.twitch.tv/oauth2/authorize?client_id=${env.PUBLIC_TWITCH_CLIENT_ID}&redirect_uri=http://localhost:8787/twitch_auth&response_type=code&scope=`
+  const twitch_login_url = `https://id.twitch.tv/oauth2/authorize?client_id=${env.PUBLIC_TWITCH_CLIENT_ID}&redirect_uri=https://${env.PUBLIC_SESSION_DOMAIN}/twitch_auth&response_type=code&scope=`
 </script>
 
 <style lang="scss">
   #header {
     display: flex;
-    height: 40px;
+    height: 3rem;
     width: 100%;
     background-color: aquamarine;
     justify-content: end;
     align-items: center;
-    gap: 8px;
-    padding: 0 24px;
+    gap: 0.5rem;
+    padding: 0 1rem;
   }
   #twitch-login {
     all: unset;
     display: flex;
-    margin: 4px;
-    padding: 4px;
-    gap: 4px;
+    padding: 0.25rem 0.5rem;
+    gap: 0.25rem;
     background-color: #9146ff;
     border-radius: 4px;
     align-items: center;
@@ -53,8 +52,8 @@
     color: white;
 
     img {
-      width: 24px;
-      height: 24px;
+      height: 1.5rem;
+      width: 1.5rem;
     }
   }
 </style>
