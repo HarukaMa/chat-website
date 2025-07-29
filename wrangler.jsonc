@@ -32,7 +32,8 @@
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 */
 	"vars": {
-	 	"CHAT_SERVER": "https://chat.sw.arm.fm"
+	 	"PUBLIC_CHAT_SERVER": "https://chat.sw.arm.fm",
+		"PUBLIC_SESSION_DOMAIN": "sw.arm.fm"
 	}
 	/**
 	 * Note: Use secrets to store sensitive data.
