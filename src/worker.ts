@@ -11,7 +11,7 @@ export type WSMessageType =
   | { type: "user_list"; users?: string[] }
   | { type: "authenticate"; session: string }
   | { type: "send_message"; message: string }
-  | { type: "message_history"; messages?: [{ name: string; name_color: string; message: string; timestamp_ms: number }] }
+  | { type: "message_history"; messages?: { name: string; name_color: string; message: string; timestamp_ms: number }[] }
   | { type: "error"; message: string }
 
 export type Session = {
@@ -45,11 +45,11 @@ export type TwitchUserToken = {
 }
 
 export type TwitchUserServer = {
-  data: [{ id: string; display_name: string }]
+  data: { id: string; display_name: string }[]
 }
 
 export type TwitchUserColorServer = {
-  data: [{ color: string }]
+  data: { color: string }[]
 }
 
 export type TwitchEmote = {
@@ -64,18 +64,73 @@ export type TwitchEmote = {
 
 export type TwitchEmotes = Array<TwitchEmote>
 
+export type TwitchEmotesCache = {
+  data: TwitchEmotes
+  expires_at: number
+}
+
 export type TwitchEmotesServer = {
-  data: [
-    {
-      id: string
-      name: string
-      format: ["static" | "animated"]
-      scale: ["1.0" | "2.0" | "3.0"]
-      theme_mode: ["light" | "dark"]
-      [key: string]: unknown
-    },
-  ]
+  data: {
+    id: string
+    name: string
+    format: ["static" | "animated"]
+    scale: ["1.0" | "2.0" | "3.0"]
+    theme_mode: ["light" | "dark"]
+    [key: string]: unknown
+  }[]
   template: string
+}
+
+export type SevenTVEmoteSetServer = {
+  data: {
+    emoteSet: {
+      emote_count: number
+      flags: number
+      owner: {
+        display_name: string
+      }
+      name: string
+      emotes: [
+        {
+          flags: number
+          name: string
+          data: {
+            animated: boolean
+            flags: number
+            host: {
+              url: string
+            }
+            owner: {
+              username: string
+            }
+          }
+        },
+      ]
+    }
+  }
+}
+
+export type SevenTVEmoteSet = {
+  name: string
+  emote_count: number
+  emotes: {
+    zero_width: boolean
+    animated: boolean
+    name: string
+    url: string
+    owner: string
+  }[]
+}
+
+export type SevenTVEmoteSets = {
+  global_emotes: SevenTVEmoteSet
+  vedal_emotes: SevenTVEmoteSet
+}
+
+export type SevenTVEmoteSetCache = {
+  global_emotes: SevenTVEmoteSet
+  vedal_emotes: SevenTVEmoteSet
+  expires_at: number
 }
 
 /**
@@ -219,7 +274,7 @@ export class DO extends DurableObject<Env> {
             return
           }
         }
-        session.name = await this.twitch_get_user_name(token)
+        session.name = await this.twitch_get_user_name(token, msg.session)
         session.authenticated = true
         ws.serializeAttachment(session)
         this.broadcast({ type: "user_join", name: session.name })
@@ -302,23 +357,6 @@ export class DO extends DurableObject<Env> {
     ws.close(1006, "error")
   }
 
-  async twitch_emotes(): Promise<Response> {
-    let emote_data = await this.ctx.storage.get<TwitchEmotes>("emote_data")
-
-    if (emote_data === undefined) {
-      console.log("No emote data found, fetching from Twitch")
-      let twitch_token = await this.ctx.storage.get<TwitchToken>("twitch_token")
-      const now = Date.now() / 1000
-      if (twitch_token === undefined || twitch_token.expires_at < now) {
-        console.log("No valid Twitch token found, authenticating")
-        twitch_token = await this.twitch_auth()
-      }
-
-      emote_data = await this.twitch_fetch_emotes(twitch_token)
-    }
-    return new Response(JSON.stringify(emote_data), { headers: { "Content-Type": "application/json" } })
-  }
-
   private async twitch_auth(): Promise<TwitchToken> {
     const response = await fetch("https://id.twitch.tv/oauth2/token", {
       method: "POST",
@@ -367,71 +405,42 @@ export class DO extends DurableObject<Env> {
     }
   }
 
-  private async twitch_get_user_name(twitch_token: TwitchUserToken): Promise<string> {
-    let response = await fetch("https://api.twitch.tv/helix/users", {
-      headers: {
-        "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${twitch_token.access_token}`,
-      },
-    })
-    if (!response.ok) {
-      console.error("ERROR: Twitch user name fetch failed:", await response.text())
-      throw new Error("Error fetching Twitch user name")
-    }
-    const json = await response.json<TwitchUserServer>()
-    const display_name = json.data[0].display_name
-    response = await fetch(`https://api.twitch.tv/helix/chat/color?user_id=${json.data[0].id}`, {
-      headers: {
-        "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${twitch_token.access_token}`,
-      },
-    })
-    if (!response.ok) {
-      console.error("ERROR: Twitch user color fetch failed:", await response.text())
-      throw new Error("Error fetching Twitch user color")
-    }
-    const color_json = await response.json<TwitchUserColorServer>()
-    await this.ctx.storage.put(`twitch_user_color_${display_name}`, color_json.data[0].color)
-    return display_name
-  }
-
-  private async twitch_fetch_emotes(twitch_token: TwitchToken): Promise<TwitchEmotes> {
-    const response = await fetch("https://api.twitch.tv/helix/chat/emotes?broadcaster_id=85498365", {
-      headers: {
-        "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${twitch_token.access_token}`,
-      },
-    })
-    console.log("Fetched Twitch emotes")
-    const json = await response.json<TwitchEmotesServer>()
-    const template = json.template
-    const emote_data: TwitchEmotes = []
-    for (const data of json.data) {
-      const id = data.id
-      let format = "static"
-      if (data.format.includes("animated")) {
-        format = "animated"
-      }
-      let theme_mode = "light"
-      if (!data.theme_mode.includes("light")) {
-        theme_mode = "dark"
-      }
-      const scale = data.scale
-      const base_url = template.replace("{{id}}", id).replace("{{format}}", format).replace("{{theme_mode}}", theme_mode)
-      const emote: TwitchEmote = {
-        name: data.name,
-        animated: format === "animated",
-        images: {
-          url_1x: scale.includes("1.0") ? base_url.replace("{{scale}}", "1.0") : null,
-          url_2x: scale.includes("2.0") ? base_url.replace("{{scale}}", "2.0") : null,
-          url_4x: scale.includes("3.0") ? base_url.replace("{{scale}}", "3.0") : null,
+  private async twitch_get_user_name(twitch_token: TwitchUserToken, session: string): Promise<string> {
+    let display_name = await this.ctx.storage.get<string>(`twitch_user_name_${session}`)
+    let user_id: string | undefined
+    if (display_name === undefined) {
+      const response = await fetch("https://api.twitch.tv/helix/users", {
+        headers: {
+          "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
+          Authorization: `Bearer ${twitch_token.access_token}`,
         },
+      })
+      if (!response.ok) {
+        console.error("ERROR: Twitch user name fetch failed:", await response.text())
+        throw new Error("Error fetching Twitch user name")
       }
-      emote_data.push(emote)
+      const json = await response.json<TwitchUserServer>()
+      display_name = json.data[0].display_name
+      user_id = json.data[0].id
+      await this.ctx.storage.put(`twitch_user_name_${session}`, display_name)
     }
-    await this.ctx.storage.put("emote_data", emote_data)
-    console.log("Stored Twitch emotes")
-    return emote_data
+    let name_color = await this.ctx.storage.get<string>(`twitch_user_color_${display_name}`)
+    if (name_color === undefined) {
+      const response = await fetch(`https://api.twitch.tv/helix/chat/color?user_id=${user_id}`, {
+        headers: {
+          "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
+          Authorization: `Bearer ${twitch_token.access_token}`,
+        },
+      })
+      if (!response.ok) {
+        console.error("ERROR: Twitch user color fetch failed:", await response.text())
+        throw new Error("Error fetching Twitch user color")
+      }
+      const color_json = await response.json<TwitchUserColorServer>()
+      name_color = color_json.data[0].color
+      await this.ctx.storage.put(`twitch_user_color_${display_name}`, name_color)
+    }
+    return display_name
   }
 
   private get_player_session(request: Request) {
@@ -494,9 +503,147 @@ export class DO extends DurableObject<Env> {
     if (twitch_token === undefined) {
       return null
     }
-    const name = await this.twitch_get_user_name(twitch_token)
+    const name = await this.twitch_get_user_name(twitch_token, session)
     const name_color = (await this.ctx.storage.get<string>(`twitch_user_color_${name}`)) || ""
     return { name, name_color }
+  }
+
+  async twitch_emotes(): Promise<TwitchEmotes> {
+    let twitch_token = await this.ctx.storage.get<TwitchToken>("twitch_token")
+    const now = Date.now() / 1000
+    if (twitch_token === undefined || twitch_token.expires_at < now) {
+      console.log("No valid Twitch token found, authenticating")
+      twitch_token = await this.twitch_auth()
+    }
+
+    const emote_cache = await this.ctx.storage.get<TwitchEmotesCache>("twitch_emotes")
+    let emote_data: TwitchEmotes = []
+    if (emote_cache === undefined || emote_cache.expires_at < Date.now() / 1000) {
+      const response = await fetch("https://api.twitch.tv/helix/chat/emotes?broadcaster_id=85498365", {
+        headers: {
+          "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
+          Authorization: `Bearer ${twitch_token.access_token}`,
+        },
+      })
+      console.log("Fetched Twitch emotes")
+      const json = await response.json<TwitchEmotesServer>()
+      const template = json.template
+      for (const data of json.data) {
+        const id = data.id
+        let format = "static"
+        if (data.format.includes("animated")) {
+          format = "animated"
+        }
+        let theme_mode = "light"
+        if (!data.theme_mode.includes("light")) {
+          theme_mode = "dark"
+        }
+        const scale = data.scale
+        const base_url = template.replace("{{id}}", id).replace("{{format}}", format).replace("{{theme_mode}}", theme_mode)
+        const emote: TwitchEmote = {
+          name: data.name,
+          animated: format === "animated",
+          images: {
+            url_1x: scale.includes("1.0") ? base_url.replace("{{scale}}", "1.0") : null,
+            url_2x: scale.includes("2.0") ? base_url.replace("{{scale}}", "2.0") : null,
+            url_4x: scale.includes("3.0") ? base_url.replace("{{scale}}", "3.0") : null,
+          },
+        }
+        emote_data.push(emote)
+        const emote_cache: TwitchEmotesCache = {
+          data: emote_data,
+          expires_at: Date.now() / 1000 + 86400,
+        }
+        await this.ctx.storage.put("twitch_emotes", emote_cache)
+      }
+    } else {
+      emote_data = emote_cache.data
+    }
+    console.log("Stored Twitch emotes")
+    return emote_data
+  }
+
+  private async get_seventv_emote_set(emote_set_id: string): Promise<SevenTVEmoteSet> {
+    const gql = `
+query EmoteSet($emoteSetId: ObjectID!) {
+  emoteSet(id: $emoteSetId) {
+    emote_count
+    flags
+    owner {
+      display_name
+    }
+    name
+    emotes {
+      flags
+      name
+      data {
+        animated
+        flags
+        host {
+          url
+        }
+        owner {
+          username
+        }
+      }
+    }
+  }
+}`
+    const response = await fetch("https://7tv.io/v3/gql", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        operationName: "EmoteSet",
+        query: gql,
+        variables: {
+          emoteSetId: emote_set_id,
+        },
+      }),
+    })
+    const json = await response.json<SevenTVEmoteSetServer>()
+    const emote_set_name = `${json.data.emoteSet.owner.display_name} - ${json.data.emoteSet.name}`
+    const emote_count = json.data.emoteSet.emote_count
+    const emotes = []
+    for (const emote of json.data.emoteSet.emotes) {
+      const emote_name = emote.name
+      const emote_animated = emote.data.animated
+      const emote_flags = emote.flags
+      const emote_url = emote.data.host.url
+      const emote_owner = emote.data.owner.username
+      const emote_data = {
+        name: emote_name,
+        animated: emote_animated,
+        zero_width: (emote_flags & 1) === 1,
+        url: emote_url,
+        owner: emote_owner,
+      }
+      emotes.push(emote_data)
+    }
+    return {
+      name: emote_set_name,
+      emote_count: emote_count,
+      emotes: emotes,
+    }
+  }
+
+  async seventv_emotes(): Promise<SevenTVEmoteSets> {
+    const vedal_emote_set_id = "01GN2QZDS0000BKRM8E4JJD3NV"
+    const global_emote_set_id = "01HKQT8EWR000ESSWF3625XCS4"
+
+    let emote_sets = await this.ctx.storage.get<SevenTVEmoteSetCache>("seventv_emotes")
+    if (emote_sets === undefined || emote_sets.expires_at < Date.now() / 1000) {
+      const vedal_emote_set = await this.get_seventv_emote_set(vedal_emote_set_id)
+      const global_emote_set = await this.get_seventv_emote_set(global_emote_set_id)
+      emote_sets = {
+        vedal_emotes: vedal_emote_set,
+        global_emotes: global_emote_set,
+        expires_at: Date.now() / 1000 + 3600,
+      }
+      await this.ctx.storage.put("seventv_emotes", emote_sets)
+    }
+    return emote_sets
   }
 
   alarm(_alarmInfo?: AlarmInvocationInfo): void | Promise<void> {
@@ -533,8 +680,6 @@ export default {
         })
       }
       return stub.fetch(request)
-    } else if (url.pathname === "/twitch_emotes") {
-      return stub.twitch_emotes()
     }
 
     return await sveltekit_worker.fetch(request, env, _ctx)

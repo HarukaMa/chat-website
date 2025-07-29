@@ -8,6 +8,8 @@
   let twitch_logged_in = $state(data.twitch_logged_in)
   let name = $state(data.name)
   let name_color = $state(data.name_color)
+  let twitch_emotes = $state(data.twitch_emotes)
+  let seventv_emotes = $state(data.seventv_emotes)
 
   if (!session && browser) {
     const cookies = document.cookie
