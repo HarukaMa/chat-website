@@ -5,7 +5,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "chat-website",
-	"main": ".svelte-kit/cloudflare/_worker.js",
+	"main": ".svelte-kit/cloudflare/entry.js",
 	"compatibility_date": "2025-07-26",
 	"compatibility_flags": ["nodejs_compat"],
 	"assets": {
@@ -27,14 +27,29 @@
 	 * databases, object storage, AI inference, real-time communication and more.
 	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
 	 */
-
+	"migrations": [
+		{
+			"new_sqlite_classes": [
+				"DO"
+			],
+			"tag": "v1"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"class_name": "DO",
+				"name": "DO"
+			}
+		]
+	},
 	/**
 	 * Environment Variables
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 */
 	"vars": {
-	 	"PUBLIC_CHAT_SERVER": "https://chat.sw.arm.fm",
-		"PUBLIC_SESSION_DOMAIN": "sw.arm.fm"
+	 	"PUBLIC_TWITCH_CLIENT_ID": "ijg6o5dv2nq9j6g4tcm6mx3p25twbz",
+		"PUBLIC_SESSION_DOMAIN": "player.sw.arm.fm"
 	}
 	/**
 	 * Note: Use secrets to store sensitive data.
