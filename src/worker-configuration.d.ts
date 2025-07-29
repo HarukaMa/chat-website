@@ -6,7 +6,7 @@ declare namespace Cloudflare {
     PUBLIC_TWITCH_CLIENT_ID: "ijg6o5dv2nq9j6g4tcm6mx3p25twbz"
     PUBLIC_SESSION_DOMAIN: "player.sw.arm.fm"
     TWITCH_CLIENT_SECRET: string
-    DO: DurableObjectNamespace<import("./entry").DO>
+    DO: DurableObjectNamespace<import("./worker").DO>
     ASSETS: Fetcher
   }
 }

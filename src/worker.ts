@@ -380,7 +380,12 @@ export class DO extends DurableObject<Env> {
     }
     const json = await response.json<TwitchUserServer>()
     const display_name = json.data[0].display_name
-    response = await fetch(`https://api.twitch.tv/helix/chat/color?user_id=${json.data[0].id}`)
+    response = await fetch(`https://api.twitch.tv/helix/chat/color?user_id=${json.data[0].id}`, {
+      headers: {
+        "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${twitch_token.access_token}`,
+      },
+    })
     if (!response.ok) {
       console.error("ERROR: Twitch user color fetch failed:", await response.text())
       throw new Error("Error fetching Twitch user color")
@@ -463,7 +468,7 @@ export class DO extends DurableObject<Env> {
           client_secret: env.TWITCH_CLIENT_SECRET,
           code: authorization_code,
           grant_type: "authorization_code",
-          redirect_uri: "https://chat.sw.arm.fm/twitch_auth",
+          redirect_uri: "https://player.sw.arm.fm/twitch_auth",
         }),
       })
       if (!response.ok) {
@@ -477,23 +482,21 @@ export class DO extends DurableObject<Env> {
         refresh_token: json.refresh_token,
       }
       await this.ctx.storage.put(`twitch_user_token_${session}`, twitch_token)
-      return Response.redirect("/", 303)
+      return Response.redirect(url.origin, 303)
     } catch (e) {
       console.error(e)
       return new Response("Error authenticating with Twitch", { status: 500 })
     }
   }
 
-  async twitch_session_check(request: Request): Promise<Response> {
-    const session = this.get_player_session(request)
-    if (session === undefined) {
-      return new Response("Player session not found", { status: 400 })
-    }
+  async twitch_session_check(session: string): Promise<{ name: string; name_color: string } | null> {
     const twitch_token = await this.ctx.storage.get<TwitchUserToken>(`twitch_user_token_${session}`)
-    return new Response(JSON.stringify(twitch_token !== undefined), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    })
+    if (twitch_token === undefined) {
+      return null
+    }
+    const name = await this.twitch_get_user_name(twitch_token)
+    const name_color = (await this.ctx.storage.get<string>(`twitch_user_color_${name}`)) || ""
+    return { name, name_color }
   }
 
   alarm(_alarmInfo?: AlarmInvocationInfo): void | Promise<void> {
@@ -532,8 +535,6 @@ export default {
       return stub.fetch(request)
     } else if (url.pathname === "/twitch_emotes") {
       return stub.twitch_emotes()
-    } else if (url.pathname === "/twitch_session_check") {
-      return stub.twitch_session_check(request)
     }
 
     return await sveltekit_worker.fetch(request, env, _ctx)
