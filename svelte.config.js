@@ -9,13 +9,11 @@ function entry_hijack(_options = {}) {
     async adapt(builder) {
       await adapter().adapt(builder)
       let dest = builder.getBuildDirectory("cloudflare")
-      console.log(dest)
       renameSync(`${dest}/entry.js`, `${dest}/_worker.js`)
       const entry_ts = readFileSync(`src/entry.ts`).toString()
       const entry_js = ts.transpileModule(entry_ts, {
         compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2021 },
       }).outputText
-      console.log(entry_js)
       writeFileSync(`${dest}/entry.js`, entry_js)
     },
     async emulate() {
