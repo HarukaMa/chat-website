@@ -5,13 +5,13 @@ import sveltekit_worker from "./_worker.js"
 import { DurableObject, env } from "cloudflare:workers"
 
 export type WSMessageType =
-  | { type: "new_message"; name: string; message: string; timestamp_ms: number }
+  | { type: "new_message"; name: string; name_color: string; message: string; timestamp_ms: number }
   | { type: "user_join"; name: string }
   | { type: "user_leave"; name: string }
   | { type: "user_list"; users?: string[] }
   | { type: "authenticate"; session: string }
   | { type: "send_message"; message: string }
-  | { type: "message_history"; messages?: [{ name: string; message: string; timestamp_ms: number }] }
+  | { type: "message_history"; messages?: [{ name: string; name_color: string; message: string; timestamp_ms: number }] }
   | { type: "error"; message: string }
 
 export type Session = {
@@ -45,7 +45,11 @@ export type TwitchUserToken = {
 }
 
 export type TwitchUserServer = {
-  data: [{ display_name: string }]
+  data: [{ id: string; display_name: string }]
+}
+
+export type TwitchUserColorServer = {
+  data: [{ color: string }]
 }
 
 export type TwitchEmote = {
@@ -237,7 +241,11 @@ export class DO extends DurableObject<Env> {
            VALUES (?, ?, ?)`,
           ...[session.name, msg.message, now],
         )
-        this.broadcast({ type: "new_message", name: session.name, message: msg.message, timestamp_ms: now })
+        let color = await this.ctx.storage.get<string>(`twitch_user_color_${session.name}`)
+        if (color === undefined) {
+          color = ""
+        }
+        this.broadcast({ type: "new_message", name: session.name, name_color: color, message: msg.message, timestamp_ms: now })
         break
       }
 
@@ -248,13 +256,26 @@ export class DO extends DurableObject<Env> {
         }
         session.history_requested = true
         ws.serializeAttachment(session)
-        const messages = this.ctx.storage.sql.exec(
+        const messages = this.ctx.storage.sql.exec<{ name: string; chat_message: string; timestamp_ms: number }>(
           `SELECT name, message, timestamp_ms
            FROM messages
            ORDER BY timestamp_ms`,
         )
-
-        ws.send(JSON.stringify({ type: "message_history", messages: messages.toArray() }))
+        const history_messages = []
+        const name_color_cache = new Map<string, string>()
+        for (const message of messages) {
+          const { name, chat_message, timestamp_ms } = message
+          let name_color = name_color_cache.get(name)
+          if (name_color === undefined) {
+            name_color = await this.ctx.storage.get<string>(`twitch_user_color_${name}`)
+            if (name_color === undefined) {
+              name_color = ""
+            }
+            name_color_cache.set(name, name_color)
+          }
+          history_messages.push({ name, name_color, message: chat_message, timestamp_ms })
+        }
+        ws.send(JSON.stringify({ type: "message_history", messages: history_messages }))
         break
       }
 
@@ -347,7 +368,7 @@ export class DO extends DurableObject<Env> {
   }
 
   private async twitch_get_user_name(twitch_token: TwitchUserToken): Promise<string> {
-    const response = await fetch("https://api.twitch.tv/helix/users", {
+    let response = await fetch("https://api.twitch.tv/helix/users", {
       headers: {
         "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
         Authorization: `Bearer ${twitch_token.access_token}`,
@@ -358,8 +379,15 @@ export class DO extends DurableObject<Env> {
       throw new Error("Error fetching Twitch user name")
     }
     const json = await response.json<TwitchUserServer>()
-    console.log(json)
-    return json.data[0].display_name
+    const display_name = json.data[0].display_name
+    response = await fetch(`https://api.twitch.tv/helix/chat/color?user_id=${json.data[0].id}`)
+    if (!response.ok) {
+      console.error("ERROR: Twitch user color fetch failed:", await response.text())
+      throw new Error("Error fetching Twitch user color")
+    }
+    const color_json = await response.json<TwitchUserColorServer>()
+    await this.ctx.storage.put(`twitch_user_color_${display_name}`, color_json.data[0].color)
+    return display_name
   }
 
   private async twitch_fetch_emotes(twitch_token: TwitchToken): Promise<TwitchEmotes> {
