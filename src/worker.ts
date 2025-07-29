@@ -53,7 +53,6 @@ export type TwitchUserColorServer = {
 }
 
 export type TwitchEmote = {
-  name: string
   images: {
     url_1x: string | null
     url_2x: string | null
@@ -62,7 +61,7 @@ export type TwitchEmote = {
   animated: boolean
 }
 
-export type TwitchEmotes = Array<TwitchEmote>
+export type TwitchEmotes = Map<string, TwitchEmote>
 
 export type TwitchEmotesCache = {
   data: TwitchEmotes
@@ -113,13 +112,15 @@ export type SevenTVEmoteSetServer = {
 export type SevenTVEmoteSet = {
   name: string
   emote_count: number
-  emotes: {
-    zero_width: boolean
-    animated: boolean
-    name: string
-    url: string
-    owner: string
-  }[]
+  emotes: Map<
+    string,
+    {
+      zero_width: boolean
+      animated: boolean
+      url: string
+      owner: string
+    }
+  >
 }
 
 export type SevenTVEmoteSets = {
@@ -128,8 +129,7 @@ export type SevenTVEmoteSets = {
 }
 
 export type SevenTVEmoteSetCache = {
-  global_emotes: SevenTVEmoteSet
-  vedal_emotes: SevenTVEmoteSet
+  data: SevenTVEmoteSets
   expires_at: number
 }
 
@@ -526,7 +526,7 @@ export class DO extends DurableObject<Env> {
     }
 
     const emote_cache = await this.ctx.storage.get<TwitchEmotesCache>("twitch_emotes")
-    let emote_data: TwitchEmotes = []
+    let emote_data: TwitchEmotes = new Map()
     if (emote_cache === undefined || emote_cache.expires_at < Date.now() / 1000) {
       const response = await fetch("https://api.twitch.tv/helix/chat/emotes?broadcaster_id=85498365", {
         headers: {
@@ -550,7 +550,6 @@ export class DO extends DurableObject<Env> {
         const scale = data.scale
         const base_url = template.replace("{{id}}", id).replace("{{format}}", format).replace("{{theme_mode}}", theme_mode)
         const emote: TwitchEmote = {
-          name: data.name,
           animated: format === "animated",
           images: {
             url_1x: scale.includes("1.0") ? base_url.replace("{{scale}}", "1.0") : null,
@@ -558,7 +557,7 @@ export class DO extends DurableObject<Env> {
             url_4x: scale.includes("3.0") ? base_url.replace("{{scale}}", "3.0") : null,
           },
         }
-        emote_data.push(emote)
+        emote_data.set(data.name, emote)
         const emote_cache: TwitchEmotesCache = {
           data: emote_data,
           expires_at: Date.now() / 1000 + 86400,
@@ -614,7 +613,7 @@ query EmoteSet($emoteSetId: ObjectID!) {
     const json = await response.json<SevenTVEmoteSetServer>()
     const emote_set_name = `${json.data.emoteSet.owner.display_name} - ${json.data.emoteSet.name}`
     const emote_count = json.data.emoteSet.emote_count
-    const emotes = []
+    const emotes = new Map()
     for (const emote of json.data.emoteSet.emotes) {
       const emote_name = emote.name
       const emote_animated = emote.data.animated
@@ -622,13 +621,12 @@ query EmoteSet($emoteSetId: ObjectID!) {
       const emote_url = emote.data.host.url
       const emote_owner = emote.data.owner.username
       const emote_data = {
-        name: emote_name,
         animated: emote_animated,
         zero_width: (emote_flags & 1) === 1,
         url: emote_url,
         owner: emote_owner,
       }
-      emotes.push(emote_data)
+      emotes.set(emote_name, emote_data)
     }
     return {
       name: emote_set_name,
@@ -646,13 +644,21 @@ query EmoteSet($emoteSetId: ObjectID!) {
       const vedal_emote_set = await this.get_seventv_emote_set(vedal_emote_set_id)
       const global_emote_set = await this.get_seventv_emote_set(global_emote_set_id)
       emote_sets = {
-        vedal_emotes: vedal_emote_set,
-        global_emotes: global_emote_set,
+        data: {
+          vedal_emotes: vedal_emote_set,
+          global_emotes: global_emote_set,
+        },
         expires_at: Date.now() / 1000 + 3600,
       }
       await this.ctx.storage.put("seventv_emotes", emote_sets)
     }
     return emote_sets
+  }
+
+  async flush_emote_cache(): Promise<Response> {
+    await this.ctx.storage.delete("twitch_emotes")
+    await this.ctx.storage.delete("seventv_emotes")
+    return new Response("OK")
   }
 
   alarm(_alarmInfo?: AlarmInvocationInfo): void | Promise<void> {
@@ -689,6 +695,8 @@ export default {
         })
       }
       return stub.fetch(request)
+    } else if (url.pathname === "/flush_emote_cache") {
+      return stub.flush_emote_cache()
     }
 
     return await sveltekit_worker.fetch(request, env, _ctx)
