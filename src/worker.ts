@@ -320,15 +320,15 @@ export class DO extends DurableObject<Env> {
         }
         session.history_requested = true
         ws.serializeAttachment(session)
-        const messages = this.ctx.storage.sql.exec<{ name: string; chat_message: string; timestamp_ms: number }>(
+        const messages = this.ctx.storage.sql.exec<{ name: string; message: string; timestamp_ms: number }>(
           `SELECT name, message, timestamp_ms
            FROM messages
            ORDER BY timestamp_ms`,
         )
         const history_messages = []
         const name_color_cache = new Map<string, string>()
-        for (const message of messages) {
-          const { name, chat_message, timestamp_ms } = message
+        for (const db_message of messages) {
+          const { name, message, timestamp_ms } = db_message
           let name_color = name_color_cache.get(name)
           if (name_color === undefined) {
             name_color = await this.ctx.storage.get<string>(`twitch_user_color_${name}`)
@@ -337,7 +337,7 @@ export class DO extends DurableObject<Env> {
             }
             name_color_cache.set(name, name_color)
           }
-          history_messages.push({ name, name_color, message: chat_message, timestamp_ms })
+          history_messages.push({ name, name_color, message, timestamp_ms })
         }
         ws.send(JSON.stringify({ type: "message_history", messages: history_messages }))
         break
