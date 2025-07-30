@@ -5,6 +5,7 @@ import sveltekit_worker from "./_worker.js"
 import { DurableObject, env } from "cloudflare:workers"
 
 export type ChatMessage = {
+  id: number
   name: string
   name_color: string
   message: string
@@ -305,17 +306,28 @@ export class DO extends DurableObject<Env> {
           ws.send(JSON.stringify({ type: "error", message: "You can only send one message every 3 seconds" }))
           return
         }
-        this.ctx.storage.sql.exec(
+        const result = this.ctx.storage.sql.exec<{ id: number }>(
           `INSERT INTO messages (name, message, timestamp_ms)
-           VALUES (?, ?, ?)`,
+           VALUES (?, ?, ?) RETURNING id`,
           ...[session.name, msg.message, now],
         )
+        let id: number | undefined
+        for (const row of result) {
+          id = row.id
+        }
+        if (id === undefined) {
+          ws.send(JSON.stringify({ type: "error", message: "Failed to store message" }))
+          return
+        }
         let color = await this.ctx.storage.get<string>(`twitch_user_color_${session.name}`)
         if (color === undefined) {
           color = ""
         }
         await this.ctx.storage.put(`last_message_time_${session.name}`, now)
-        this.broadcast({ type: "new_message", message: { name: session.name, name_color: color, message: msg.message, timestamp_ms: now } })
+        this.broadcast({
+          type: "new_message",
+          message: { id, name: session.name, name_color: color, message: msg.message, timestamp_ms: now },
+        })
         break
       }
 
@@ -326,15 +338,15 @@ export class DO extends DurableObject<Env> {
         }
         session.history_requested = true
         ws.serializeAttachment(session)
-        const messages = this.ctx.storage.sql.exec<{ name: string; message: string; timestamp_ms: number }>(
-          `SELECT name, message, timestamp_ms
+        const messages = this.ctx.storage.sql.exec<{ id: number; name: string; message: string; timestamp_ms: number }>(
+          `SELECT id, name, message, timestamp_ms
            FROM messages
            ORDER BY timestamp_ms`,
         )
-        const history_messages = []
+        const history_messages: ChatMessage[] = []
         const name_color_cache = new Map<string, string>()
         for (const db_message of messages) {
-          const { name, message, timestamp_ms } = db_message
+          const { id, name, message, timestamp_ms } = db_message
           let name_color = name_color_cache.get(name)
           if (name_color === undefined) {
             name_color = await this.ctx.storage.get<string>(`twitch_user_color_${name}`)
@@ -343,7 +355,7 @@ export class DO extends DurableObject<Env> {
             }
             name_color_cache.set(name, name_color)
           }
-          history_messages.push({ name, name_color, message, timestamp_ms })
+          history_messages.push({ id, name, name_color, message, timestamp_ms })
         }
         ws.send(JSON.stringify({ type: "message_history", messages: history_messages }))
         break
