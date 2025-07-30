@@ -147,6 +147,7 @@
     if (e.key === "Enter") {
       if (chat_input.value) {
         console.log("chat input", chat_input.value)
+        await send_chat_message({ type: "send_message", message: chat_input.value })
         chat_input.value = ""
       }
     }
@@ -169,6 +170,7 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0 1rem;
+    color: #eee;
   }
 
   #twitch-login {
