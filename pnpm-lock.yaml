@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@eyevinn/webrtc-player':
+        specifier: 0.13.0
+        version: 0.13.0
     devDependencies:
       '@eslint/compat':
         specifier: ^1.2.5
@@ -23,6 +27,9 @@ importers:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^6.0.0
         version: 6.1.0(svelte@5.37.1)(vite@7.0.6(@types/node@24.1.0)(sass-embedded@1.89.2))
+      '@types/webrtc':
+        specifier: ^0.0.46
+        version: 0.0.46
       eslint:
         specifier: ^9.18.0
         version: 9.32.0
@@ -121,6 +128,14 @@ packages:
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
     engines: {node: '>=12'}
+
+  '@dailymotion/vast-client@4.0.1':
+    resolution: {integrity: sha512-oRUCc06bWdX/1f2Eha/od5WCj+MLHiD6rgyAudgjOUyWXhCcbkUTZeejBSQsLft0nFnd+5nrDqGkBD8mrEVd/Q==}
+    engines: {node: '>=12.22.1'}
+
+  '@dailymotion/vmap@3.3.3':
+    resolution: {integrity: sha512-M/z1U6Pm19HKasHQA6n/IxqpbukcW37iCRQ8Zr567suw+nNDqJowKFWQcW8dW7SX8QZWItf7XSOawaQrzgQj+g==}
+    engines: {node: '>=12.22.1'}
 
   '@emnapi/runtime@1.4.5':
     resolution: {integrity: sha512-++LApOtY0pEEz1zrd9vy1/zXVaVJJ/EbAF3u0fXIzPJEDtnITsBGbbK0EkM72amhl/R5b+5xx0Y/QhcVOpuulg==}
@@ -478,6 +493,20 @@ packages:
     resolution: {integrity: sha512-Ul5l+lHEcw3L5+k8POx6r74mxEYKG5kOb6Xpy2gCRW6zweT6TEhAf8vhxGgjhqrd/VO/Dirhsb+1hNpD1ue9hw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
+  '@eyevinn/csai-manager@0.1.2':
+    resolution: {integrity: sha512-ZehCxXlSIHF5Ej1n/WZEaLa6sLIH5zrE1ZB71yyT/KbFoeDsDDoo+jw61xzzT+pKBb4vNBtKQRgaVDGZdT2L/g==}
+
+  '@eyevinn/video-event-filter@2.0.0':
+    resolution: {integrity: sha512-S5pECmymqg7WqlAeerhtPVEFxWhLY3cz3DTuhuljZreVDLnEBV6/DlWI6SWDnKdpDJMgD6VjPfaRJssmGatNBg==}
+    deprecated: Package no longer maintained, we recommend migrating to @eyevinn/media-event-filter
+
+  '@eyevinn/webrtc-player@0.13.0':
+    resolution: {integrity: sha512-X5Nzznbyw9PXj85HYV7nyHSbeC0tWpTTAFEYjilnlLLWfo9EARx1tCQk5tdhmImnDST8VN50SYt6uMDudoVnWw==}
+    engines: {node: '>=18.15.0'}
+
+  '@eyevinn/whpp-client@0.1.2':
+    resolution: {integrity: sha512-Mau11ykVIZudy+7Qz2tJZbV2cuj8Un7eT2QRBGFA42RPL8djfEi/RIZ+6b9C1Bc1EAppl26zoh28D8/KstFioQ==}
+
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
     engines: {node: '>=18.18.0'}
@@ -797,6 +826,9 @@ packages:
   '@types/node@24.1.0':
     resolution: {integrity: sha512-ut5FthK5moxFKH2T1CUOC6ctR67rQRvvHdFLCD2Ql6KXmMuCrjsSsRI9UsLCm9M18BMwClv4pn327UvB7eeO1w==}
 
+  '@types/webrtc@0.0.46':
+    resolution: {integrity: sha512-cvCnjKy0ma9ODWbVYBTMMB+WkocwLcscCwn2/caDVdb9MWaesS8PYGapIIHFsAaIBXRFlH1Fc7ZjIBO6pH0HKA==}
+
   '@typescript-eslint/eslint-plugin@8.38.0':
     resolution: {integrity: sha512-CPoznzpuAnIOl4nhj4tRr4gIPj5AfKgkiJmGQDaq+fQnRJTYlcBjbX3wbciGmpoPf8DREufuPRe1tNMZnGdanA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
@@ -855,6 +887,10 @@ packages:
   '@typescript-eslint/visitor-keys@8.38.0':
     resolution: {integrity: sha512-pWrTcoFNWuwHlA9CvlfSsGWs14JxfN1TH25zM5L7o0pRLhsoZkDnTsXfQRJBEWJoV5DL0jf+Z+sxiud+K0mq1g==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@xmldom/xmldom@0.8.10':
+    resolution: {integrity: sha512-2WALfTl4xo2SkGCYRt6rDTFfk9R1czmBvUQy12gK2KuRKIpWEhcbbzy8EZXtz/jkRqHX8bFEc6FC1HjX4TUWYw==}
+    engines: {node: '>=10.0.0'}
 
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
@@ -1072,6 +1108,10 @@ packages:
     resolution: {integrity: sha512-kVscqXk4OCp68SZ0dkgEKVi6/8ij300KBWTJq32P/dYeWTSwK41WyTxalN1eRmA5Z9UU/LX9D7FWSmV9SAYx6g==}
     engines: {node: '>=0.10.0'}
 
+  events@3.3.0:
+    resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
+    engines: {node: '>=0.8.x'}
+
   exit-hook@2.2.1:
     resolution: {integrity: sha512-eNTPlAD67BmP31LDINZ3U7HSF8l57TxOY2PmBJ1shpCvpnxBF93mWCE8YHBnXs8qiUZJc9WDcWIeC3a2HIAMfw==}
     engines: {node: '>=6'}
@@ -1261,6 +1301,12 @@ packages:
   minimatch@9.0.5:
     resolution: {integrity: sha512-G6T0ZX48xgozx7587koeX9Ys2NYy6Gmv//P89sEte9V9whIapMNF4idKxnW2QtCcLiTWlb/wfCabAtAFWhhBow==}
     engines: {node: '>=16 || 14 >=14.17'}
+
+  mitt@2.1.0:
+    resolution: {integrity: sha512-ILj2TpLiysu2wkBbWjAmww7TkZb65aiQO+DkVdUTBpBXq+MHYiETENkKFMtsJZX1Lf4pe4QOrTSjIfUwN5lRdg==}
+
+  mitt@3.0.1:
+    resolution: {integrity: sha512-vKivATfr97l2/QBCYAkXYDbrIWPM2IIKEl7YPhjCvKlG3kE2gm+uBo6nEXK3M5/Ffh/FLpKExzOQ3JJoJGFKBw==}
 
   mri@1.2.0:
     resolution: {integrity: sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA==}
@@ -1798,6 +1844,12 @@ snapshots:
     dependencies:
       '@jridgewell/trace-mapping': 0.3.9
 
+  '@dailymotion/vast-client@4.0.1':
+    dependencies:
+      '@xmldom/xmldom': 0.8.10
+
+  '@dailymotion/vmap@3.3.3': {}
+
   '@emnapi/runtime@1.4.5':
     dependencies:
       tslib: 2.8.1
@@ -2003,6 +2055,25 @@ snapshots:
     dependencies:
       '@eslint/core': 0.15.1
       levn: 0.4.1
+
+  '@eyevinn/csai-manager@0.1.2':
+    dependencies:
+      '@dailymotion/vast-client': 4.0.1
+      '@dailymotion/vmap': 3.3.3
+      '@eyevinn/video-event-filter': 2.0.0
+      mitt: 3.0.1
+
+  '@eyevinn/video-event-filter@2.0.0':
+    dependencies:
+      mitt: 2.1.0
+
+  '@eyevinn/webrtc-player@0.13.0':
+    dependencies:
+      '@eyevinn/csai-manager': 0.1.2
+      '@eyevinn/whpp-client': 0.1.2
+      events: 3.3.0
+
+  '@eyevinn/whpp-client@0.1.2': {}
 
   '@humanfs/core@0.19.1': {}
 
@@ -2263,6 +2334,8 @@ snapshots:
       undici-types: 7.8.0
     optional: true
 
+  '@types/webrtc@0.0.46': {}
+
   '@typescript-eslint/eslint-plugin@8.38.0(@typescript-eslint/parser@8.38.0(eslint@9.32.0)(typescript@5.8.3))(eslint@9.32.0)(typescript@5.8.3)':
     dependencies:
       '@eslint-community/regexpp': 4.12.1
@@ -2355,6 +2428,8 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 8.38.0
       eslint-visitor-keys: 4.2.1
+
+  '@xmldom/xmldom@0.8.10': {}
 
   acorn-jsx@5.3.2(acorn@8.15.0):
     dependencies:
@@ -2617,6 +2692,8 @@ snapshots:
 
   esutils@2.0.3: {}
 
+  events@3.3.0: {}
+
   exit-hook@2.2.1: {}
 
   exsolve@1.0.7: {}
@@ -2784,6 +2861,10 @@ snapshots:
   minimatch@9.0.5:
     dependencies:
       brace-expansion: 2.0.2
+
+  mitt@2.1.0: {}
+
+  mitt@3.0.1: {}
 
   mri@1.2.0: {}
 

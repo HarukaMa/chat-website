@@ -4,14 +4,22 @@ import sveltekit_worker from "./_worker.js"
 
 import { DurableObject, env } from "cloudflare:workers"
 
+export type ChatMessage = {
+  name: string
+  name_color: string
+  message: string
+  timestamp_ms: number
+}
+
 export type WSMessageType =
-  | { type: "new_message"; name: string; name_color: string; message: string; timestamp_ms: number }
+  | { type: "new_message"; message: ChatMessage }
   | { type: "user_join"; name: string }
   | { type: "user_leave"; name: string }
   | { type: "user_list"; users?: string[] }
   | { type: "authenticate"; session: string }
   | { type: "send_message"; message: string }
-  | { type: "message_history"; messages?: { name: string; name_color: string; message: string; timestamp_ms: number }[] }
+  | { type: "history_request" }
+  | { type: "message_history"; messages: ChatMessage[] }
   | { type: "error"; message: string }
 
 export type Session = {
@@ -242,6 +250,7 @@ export class DO extends DurableObject<Env> {
       case "new_message":
       case "user_join":
       case "user_leave":
+      case "message_history":
         ws.close(1007, "invalid message type")
         return
 
@@ -300,11 +309,11 @@ export class DO extends DurableObject<Env> {
         if (color === undefined) {
           color = ""
         }
-        this.broadcast({ type: "new_message", name: session.name, name_color: color, message: msg.message, timestamp_ms: now })
+        this.broadcast({ type: "new_message", message: { name: session.name, name_color: color, message: msg.message, timestamp_ms: now } })
         break
       }
 
-      case "message_history": {
+      case "history_request": {
         if (session.history_requested) {
           ws.send(JSON.stringify({ type: "error", message: "History already requested" }))
           return
