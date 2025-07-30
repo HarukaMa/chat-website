@@ -75,7 +75,7 @@
   //   })
   //   player.on("stats.data-channel", (report) => {
   //     rtc_channel_state = report.state
-  //     rtc_channel_received_bytes = report.bytesReceivec
+  //     rtc_channel_received_bytes = report.bytesReceived
   //   })
   // }
 
@@ -83,7 +83,7 @@
 
   let chat_ws: WebSocket | undefined
 
-  let chat_messages: ChatMessage[] = $state([])
+  let chat_messages: (ChatMessage | string)[] = $state([])
 
   async function connect_chat() {
     if (chat_ws && chat_connected) {
@@ -101,11 +101,13 @@
     }
     chat_ws.onclose = () => {
       console.log("chat disconnected")
+      chat_messages.push("disconnected from chat server")
       chat_connected = false
       chat_can_reconnect = true
     }
     chat_ws.onerror = (e) => {
       console.log("chat error", e)
+      chat_messages.push(`disconnected from chat server with error: ${e}`)
       chat_connected = false
       chat_can_reconnect = true
     }
@@ -139,6 +141,7 @@
         break
       case "error":
         console.log("chat error:", message.message)
+        chat_messages.push(message.message)
         break
     }
   }
@@ -338,7 +341,11 @@
       <div id="chat-messages">
         {#each chat_messages as message}
           <div>
-            <span style="color: {message.name_color}">{message.name}</span>: {message.message}
+            {#if typeof message === "string"}
+              <em style="color: #aaa">{message}</em>
+            {:else}
+              <span style="color: {message.name_color}">{message.name}</span>: {message.message}
+            {/if}
           </div>
         {/each}
       </div>

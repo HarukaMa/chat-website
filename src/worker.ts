@@ -299,7 +299,12 @@ export class DO extends DurableObject<Env> {
           ws.close(1007, "invalid message content")
           return
         }
+        const last_message_time = await this.ctx.storage.get<number>(`last_message_time_${session.name}`)
         const now = Date.now()
+        if (last_message_time !== undefined && now - last_message_time < 3000) {
+          ws.send(JSON.stringify({ type: "error", message: "You can only send one message every 3 seconds" }))
+          return
+        }
         this.ctx.storage.sql.exec(
           `INSERT INTO messages (name, message, timestamp_ms)
            VALUES (?, ?, ?)`,
@@ -309,6 +314,7 @@ export class DO extends DurableObject<Env> {
         if (color === undefined) {
           color = ""
         }
+        await this.ctx.storage.put(`last_message_time_${session.name}`, now)
         this.broadcast({ type: "new_message", message: { name: session.name, name_color: color, message: msg.message, timestamp_ms: now } })
         break
       }
