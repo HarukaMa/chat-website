@@ -155,6 +155,15 @@
       }
     }
   }
+
+  function format_timestamp(timestamp_ms: number) {
+    const date = new Date(timestamp_ms)
+    const hours = date.getHours().toString().padStart(2, "0")
+    const minutes = date.getMinutes().toString().padStart(2, "0")
+    const seconds = date.getSeconds().toString().padStart(2, "0")
+    const milliseconds = date.getMilliseconds().toString().padStart(3, "0")
+    return `${hours}:${minutes}:${seconds}.${milliseconds}`
+  }
 </script>
 
 <style lang="scss">
@@ -346,6 +355,7 @@
             {#if typeof message === "string"}
               <em style="color: #aaa">{message}</em>
             {:else}
+              <span style="color: #aaa; font-size: 12px">{format_timestamp(message.timestamp_ms)}</span>
               <span style="color: {message.name_color}">{message.name}</span>: {message.message}
             {/if}
           </div>
