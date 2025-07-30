@@ -648,11 +648,14 @@ query EmoteSet($emoteSetId: ObjectID!) {
           vedal_emotes: vedal_emote_set,
           global_emotes: global_emote_set,
         },
-        expires_at: Date.now() / 1000 + 3600,
+        expires_at: Date.now() / 1000 + 86400,
       }
       await this.ctx.storage.put("seventv_emotes", emote_sets)
     }
-    return emote_sets
+    return {
+      global_emotes: emote_sets.data.global_emotes,
+      vedal_emotes: emote_sets.data.vedal_emotes,
+    }
   }
 
   async flush_emote_cache(): Promise<Response> {
