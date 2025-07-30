@@ -255,6 +255,8 @@
     flex: 1 1 auto;
     overflow-y: scroll;
     padding: 0.5rem;
+    font-size: 14px;
+    line-height: 1.25rem;
   }
 
   #chat-input {
