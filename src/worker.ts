@@ -98,22 +98,24 @@ export type SevenTVEmoteSetServer = {
         display_name: string
       }
       name: string
-      emotes: [
-        {
+      emotes: {
+        flags: number
+        name: string
+        data: {
+          animated: boolean
           flags: number
-          name: string
-          data: {
-            animated: boolean
-            flags: number
-            host: {
-              url: string
-            }
-            owner: {
-              username: string
-            }
+          host: {
+            url: string
+            files: {
+              height: number
+              width: number
+            }[]
           }
-        },
-      ]
+          owner: {
+            username: string
+          }
+        }
+      }[]
     }
   }
 }
@@ -128,6 +130,8 @@ export type SevenTVEmoteSet = {
       animated: boolean
       url: string
       owner: string
+      height: number
+      width: number
     }
   >
 }
@@ -604,7 +608,7 @@ export class DO extends DurableObject<Env> {
 
   private async get_seventv_emote_set(emote_set_id: string): Promise<SevenTVEmoteSet> {
     const gql = `
-query EmoteSet($emoteSetId: ObjectID!) {
+query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
   emoteSet(id: $emoteSetId) {
     emote_count
     flags
@@ -620,6 +624,10 @@ query EmoteSet($emoteSetId: ObjectID!) {
         flags
         host {
           url
+          files(formats: $formats) {
+            height
+            width
+          }
         }
         owner {
           username
@@ -638,6 +646,7 @@ query EmoteSet($emoteSetId: ObjectID!) {
         query: gql,
         variables: {
           emoteSetId: emote_set_id,
+          formats: ["AVIF"],
         },
       }),
     })
@@ -651,11 +660,15 @@ query EmoteSet($emoteSetId: ObjectID!) {
       const emote_flags = emote.flags
       const emote_url = emote.data.host.url
       const emote_owner = emote.data.owner.username
+      const emote_height = emote.data.host.files[0].height
+      const emote_width = emote.data.host.files[0].width
       const emote_data = {
         animated: emote_animated,
         zero_width: (emote_flags & 1) === 1,
         url: emote_url,
         owner: emote_owner,
+        height: emote_height,
+        width: emote_width,
       }
       emotes.set(emote_name, emote_data)
     }
