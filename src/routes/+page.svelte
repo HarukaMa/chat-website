@@ -10,7 +10,7 @@
 
   let { data } = $props()
   let session = $state(data.session)
-  let twitch_logged_in = true // $state(data.twitch_logged_in)
+  let twitch_logged_in = $state(data.twitch_logged_in)
   let name = $state(data.name)
   let name_color = $state(data.name_color)
   let twitch_emotes = $state(data.twitch_emotes)
