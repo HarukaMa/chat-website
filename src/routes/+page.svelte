@@ -5,6 +5,7 @@
   import pkg from "@eyevinn/webrtc-player"
   import { onMount } from "svelte"
   import type { ChatMessage, WSMessageType } from "../worker"
+  import ChatMessageRow from "$lib/components/ChatMessageRow.svelte"
   const { WebRTCPlayer } = pkg
 
   let { data } = $props()
@@ -149,7 +150,7 @@
   async function handle_chat_keydown(e: KeyboardEvent) {
     if (e.key === "Enter") {
       console.log("chat input", chat_input)
-      // await send_chat_message({ type: "send_message", message: chat_input })
+      await send_chat_message({ type: "send_message", message: chat_input })
       chat_input = ""
     }
   }
@@ -160,15 +161,6 @@
       const input = document.getElementById("chat-input-field") as HTMLInputElement
       input.value = chat_input
     }
-  }
-
-  function format_timestamp(timestamp_ms: number) {
-    const date = new Date(timestamp_ms)
-    const hours = date.getHours().toString().padStart(2, "0")
-    const minutes = date.getMinutes().toString().padStart(2, "0")
-    const seconds = date.getSeconds().toString().padStart(2, "0")
-    const milliseconds = date.getMilliseconds().toString().padStart(3, "0")
-    return `${hours}:${minutes}:${seconds}.${milliseconds}`
   }
 </script>
 
@@ -371,8 +363,7 @@
             {#if typeof message === "string"}
               <em style="color: #aaa">{message}</em>
             {:else}
-              <span style="color: #aaa; font-size: 12px">{format_timestamp(message.timestamp_ms)}</span>
-              <span style="color: {message.name_color}">{message.name}</span>: {message.message}
+              <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} />
             {/if}
           </div>
         {/each}

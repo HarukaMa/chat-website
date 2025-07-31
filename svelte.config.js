@@ -27,7 +27,7 @@ function entry_hijack(_options = {}) {
 const config = {
   // Consult https://svelte.dev/docs/kit/integrations
   // for more information about preprocessors
-  preprocess: vitePreprocess(),
+  preprocess: vitePreprocess({ script: true }),
   kit: { adapter: entry_hijack() },
 }
 
