@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SevenTVEmoteSets, TwitchEmotes } from "../../worker"
+  import type { SevenTVEmotes, TwitchEmotes } from "../../worker"
   import ChatMessageEmote from "$lib/components/ChatMessageEmote.svelte"
 
   type ChatMessageProps = {
@@ -9,7 +9,7 @@
     message: string
     timestamp_ms: number
     twitch_emotes: TwitchEmotes | null
-    seventv_emotes: SevenTVEmoteSets | null
+    seventv_emotes: SevenTVEmotes | null
     is_admin: boolean
     delete_message: (id: number) => Promise<void>
   }
@@ -32,14 +32,7 @@
 
   function is_emote(name: string): EmoteType | null {
     if (seventv_emotes) {
-      let emote_data = seventv_emotes.vedal_emotes.emotes.get(name)
-      if (emote_data !== undefined) {
-        if (emote_data.zero_width) {
-          return EmoteType.ZERO_WIDTH
-        }
-        return EmoteType.NORMAL
-      }
-      emote_data = seventv_emotes.global_emotes.emotes.get(name)
+      const emote_data = seventv_emotes.get(name)
       if (emote_data !== undefined) {
         if (emote_data.zero_width) {
           return EmoteType.ZERO_WIDTH

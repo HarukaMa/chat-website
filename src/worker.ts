@@ -127,29 +127,21 @@ export type SevenTVEmoteSetServer = {
   }
 }
 
-export type SevenTVEmoteSet = {
-  name: string
-  emote_count: number
-  emotes: Map<
-    string,
-    {
-      zero_width: boolean
-      animated: boolean
-      url: string
-      owner: string
-      height: number
-      width: number
-    }
-  >
-}
+export type SevenTVEmotes = Map<
+  string,
+  {
+    zero_width: boolean
+    animated: boolean
+    url: string
+    owner: string
+    height: number
+    width: number
+    set_name: string
+  }
+>
 
-export type SevenTVEmoteSets = {
-  global_emotes: SevenTVEmoteSet
-  vedal_emotes: SevenTVEmoteSet
-}
-
-export type SevenTVEmoteSetCache = {
-  data: SevenTVEmoteSets
+export type SevenTVEmotesCache = {
+  data: SevenTVEmotes
   expires_at: number
 }
 
@@ -807,7 +799,7 @@ export class DO extends DurableObject<Env> {
     return emote_data
   }
 
-  private async get_seventv_emote_set(emote_set_id: string): Promise<SevenTVEmoteSet> {
+  private async get_seventv_emote_set(emote_set_id: string): Promise<SevenTVEmotes> {
     const gql = `
 query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
   emoteSet(id: $emoteSetId) {
@@ -853,7 +845,6 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
     })
     const json = await response.json<SevenTVEmoteSetServer>()
     const emote_set_name = `${json.data.emoteSet.owner.display_name} - ${json.data.emoteSet.name}`
-    const emote_count = json.data.emoteSet.emote_count
     const emotes = new Map()
     for (const emote of json.data.emoteSet.emotes) {
       const emote_name = emote.name
@@ -870,37 +861,35 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
         owner: emote_owner,
         height: emote_height,
         width: emote_width,
+        set_name: emote_set_name,
       }
       emotes.set(emote_name, emote_data)
     }
-    return {
-      name: emote_set_name,
-      emote_count: emote_count,
-      emotes: emotes,
-    }
+    return emotes
   }
 
-  async seventv_emotes(): Promise<SevenTVEmoteSets> {
-    const vedal_emote_set_id = "01GN2QZDS0000BKRM8E4JJD3NV"
-    const global_emote_set_id = "01HKQT8EWR000ESSWF3625XCS4"
+  async seventv_emotes(): Promise<SevenTVEmotes> {
+    const emote_set_ids = [
+      "01GN2QZDS0000BKRM8E4JJD3NV", // vedal
+      "01JKCEZS0D4MGWVNGKQWBTWSYT", // swarmfm whisper
+      "01JKCF444J7HTNKE4TEQ0DBP1F", // swarmfm emotes
+      "01K1H87ZZVE92Y3Z37H3ES6BK8", // dafox
+      "01HKQT8EWR000ESSWF3625XCS4", // global
+    ]
 
-    let emote_sets = await this.ctx.storage.get<SevenTVEmoteSetCache>("seventv_emotes")
+    let emote_sets = await this.ctx.storage.get<SevenTVEmotesCache>("seventv_emotes")
     if (emote_sets === undefined || emote_sets.expires_at < Date.now() / 1000) {
-      const vedal_emote_set = await this.get_seventv_emote_set(vedal_emote_set_id)
-      const global_emote_set = await this.get_seventv_emote_set(global_emote_set_id)
-      emote_sets = {
-        data: {
-          vedal_emotes: vedal_emote_set,
-          global_emotes: global_emote_set,
-        },
-        expires_at: Date.now() / 1000 + 86400,
+      const emotes = new Map() as SevenTVEmotes
+      for (const emote_set_id of emote_set_ids.toReversed()) {
+        const set_emotes = await this.get_seventv_emote_set(emote_set_id)
+        set_emotes.forEach((emote_data, emote_name) => {
+          emotes.set(emote_name, emote_data)
+        })
       }
+      emote_sets = { data: emotes, expires_at: Date.now() / 1000 + 86400 }
       await this.ctx.storage.put("seventv_emotes", emote_sets)
     }
-    return {
-      global_emotes: emote_sets.data.global_emotes,
-      vedal_emotes: emote_sets.data.vedal_emotes,
-    }
+    return emote_sets.data
   }
 
   async flush_emote_cache(): Promise<Response> {

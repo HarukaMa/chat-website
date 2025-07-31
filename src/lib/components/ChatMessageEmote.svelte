@@ -1,34 +1,32 @@
 <script lang="ts">
-  import type { SevenTVEmoteSets, TwitchEmotes } from "../../worker"
+  import type { SevenTVEmotes, TwitchEmotes } from "../../worker"
 
   type ChatMessageEmoteProps = {
     name: string
     zero_widths: string[]
     twitch_emotes: TwitchEmotes | null
-    seventv_emotes: SevenTVEmoteSets | null
+    seventv_emotes: SevenTVEmotes | null
   }
 
   let { name, twitch_emotes, seventv_emotes, zero_widths }: ChatMessageEmoteProps = $props()
 
-  function get_emote_urls(name: string): { url_1x: string; url_2x: string; url_3x: string; url_4x: string; width: number } {
+  function get_emote_data(name: string): {
+    url_1x: string
+    url_2x: string
+    url_3x: string
+    url_4x: string
+    width: number
+    set_name: string
+    owner: string
+  } {
     if (seventv_emotes) {
-      // channel emotes
-      let emote_data = seventv_emotes.vedal_emotes.emotes.get(name)
+      let emote_data = seventv_emotes.get(name)
       if (emote_data !== undefined) {
         const url_1x = emote_data.url + "/1x.avif"
         const url_2x = emote_data.url + "/2x.avif"
         const url_3x = emote_data.url + "/3x.avif"
         const url_4x = emote_data.url + "/4x.avif"
-        return { url_1x, url_2x, url_3x, url_4x, width: emote_data.width }
-      }
-      // global emotes
-      emote_data = seventv_emotes.global_emotes.emotes.get(name)
-      if (emote_data !== undefined) {
-        const url_1x = emote_data.url + "/1x.avif"
-        const url_2x = emote_data.url + "/2x.avif"
-        const url_3x = emote_data.url + "/3x.avif"
-        const url_4x = emote_data.url + "/4x.avif"
-        return { url_1x, url_2x, url_3x, url_4x, width: emote_data.width }
+        return { url_1x, url_2x, url_3x, url_4x, width: emote_data.width, set_name: emote_data.set_name, owner: emote_data.owner }
       }
     }
     if (twitch_emotes) {
@@ -37,15 +35,15 @@
         // there should be no missing urls here
         const url_2x = emote_data.images.url_2x || ""
         const url_4x = emote_data.images.url_4x || ""
-        return { url_1x: url_2x, url_2x: url_4x, url_3x: url_4x, url_4x, width: 32 }
+        return { url_1x: url_2x, url_2x: url_4x, url_3x: url_4x, url_4x, width: 32, set_name: "vedal987 Twitch Emotes", owner: "" }
       }
     }
-    return { url_1x: "", url_2x: "", url_3x: "", url_4x: "", width: 0 }
+    return { url_1x: "", url_2x: "", url_3x: "", url_4x: "", width: 0, set_name: "", owner: "" }
   }
 
-  const emote = { name: name, ...get_emote_urls(name) }
+  const emote = { name: name, ...get_emote_data(name) }
   const zw_emotes = zero_widths.map((zw) => {
-    return { name: zw, ...get_emote_urls(zw) }
+    return { name: zw, ...get_emote_data(zw) }
   })
   const max_width = Math.max(emote.width, ...zw_emotes.map((zw) => zw.width))
 </script>
