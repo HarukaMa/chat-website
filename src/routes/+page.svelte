@@ -284,6 +284,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    flex: 0 0 auto;
   }
 
   #chat-messages {
@@ -302,6 +303,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    flex: 0 0 auto;
   }
 
   #chat-input-area {
