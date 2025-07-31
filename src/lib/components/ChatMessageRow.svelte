@@ -100,11 +100,15 @@
     line-break: normal;
     overflow-wrap: normal;
   }
+
+  .chat-delete {
+    cursor: pointer;
+  }
 </style>
 
 <div class="chat-message">
   {#if is_admin}
-    <span style="color: #aaa; font-size: 12px" onclick={delete_this_message}>⨯</span>
+    <span class="chat-delete" style="color: #aaa; font-size: 12px" onclick={delete_this_message}>⨯</span>
   {/if}
   <span style="color: #aaa; font-size: 12px">{format_timestamp(timestamp_ms)}</span>
   <!-- no line break - can't have whitespace here -->

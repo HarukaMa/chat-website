@@ -152,6 +152,9 @@
         console.log("chat error:", message.message)
         chat_messages.push(message.message)
         break
+      case "message_deleted":
+        message_deleted(message.id)
+        break
     }
   }
 
@@ -171,8 +174,18 @@
     }
   }
 
-  async function delete_message(id) {
+  async function delete_message(id: number) {
     await send_chat_message({ type: "delete_message", id })
+  }
+
+  function message_deleted(id: number) {
+    for (let i = 0; i < chat_messages.length; i++) {
+      const message = chat_messages[i]
+      if (typeof message === "object" && message.id === id) {
+        chat_messages.splice(i, 1)
+        break
+      }
+    }
   }
 </script>
 
