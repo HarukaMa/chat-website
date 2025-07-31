@@ -206,6 +206,7 @@
     gap: 0.5rem;
     padding: 0 1rem;
     color: #eee;
+    flex: 0 0 auto;
   }
 
   #twitch-login {
@@ -229,6 +230,7 @@
     display: flex;
     flex: 1 1 auto;
     background-color: bisque;
+    min-height: 40rem;
   }
 
   #player {
