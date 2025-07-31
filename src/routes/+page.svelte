@@ -6,6 +6,7 @@
   import { onMount } from "svelte"
   import type { ChatMessage, WSMessageType } from "../worker"
   import ChatMessageRow from "$lib/components/ChatMessageRow.svelte"
+  import type { Action } from "svelte/action"
   const { WebRTCPlayer } = pkg
 
   let { data } = $props()
@@ -25,8 +26,9 @@
 
   let chat_connected = $state(false)
   let chat_can_reconnect = $state(false)
-
   let chat_authenticated = $state(false)
+
+  let chat_should_scroll_to_bottom = $state(true)
 
   if (!session && browser) {
     const cookies = document.cookie
@@ -87,6 +89,7 @@
   let chat_ws: WebSocket | undefined
 
   let chat_messages: (ChatMessage | string)[] = $state([])
+  let chat_messages_container: HTMLDivElement
 
   async function connect_chat() {
     if (chat_ws && chat_connected) {
@@ -132,9 +135,11 @@
     switch (message.type) {
       case "message_history":
         chat_messages = message.messages
+        // scroll_to_bottom()
         break
       case "new_message":
         chat_messages.push(message.message)
+        // scroll_to_bottom()
         break
       case "user_join":
         console.log("user joined:", message.name)
@@ -144,13 +149,16 @@
         break
       case "user_timed_out":
         chat_messages.push(`${message.name} has been timed out for ${message.duration} seconds`)
+        // scroll_to_bottom()
         break
       case "user_banned":
         chat_messages.push(`${message.name} has been banned`)
+        // scroll_to_bottom()
         break
       case "error":
         console.log("chat error:", message.message)
         chat_messages.push(message.message)
+        // scroll_to_bottom()
         break
       case "message_deleted":
         message_deleted(message.id)
@@ -185,6 +193,17 @@
         chat_messages.splice(i, 1)
         break
       }
+    }
+  }
+
+  function on_chat_scroll() {
+    chat_should_scroll_to_bottom =
+      chat_messages_container.scrollTop + chat_messages_container.clientHeight === chat_messages_container.scrollHeight
+  }
+
+  const scroll_to_bottom: Action = (_node) => {
+    if (chat_should_scroll_to_bottom) {
+      chat_messages_container.scrollTop = chat_messages_container.scrollHeight
     }
   }
 </script>
@@ -388,9 +407,9 @@
           <button onclick={connect_chat}>Reconnect</button>
         {/if}
       </div>
-      <div id="chat-messages">
+      <div id="chat-messages" bind:this={chat_messages_container} onscroll={on_chat_scroll}>
         {#each chat_messages as message (message)}
-          <div>
+          <div use:scroll_to_bottom>
             {#if typeof message === "string"}
               <em style="color: #aaa">{message}</em>
             {:else}
