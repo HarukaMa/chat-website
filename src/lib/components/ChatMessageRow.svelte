@@ -56,12 +56,17 @@
   const message_parts: (string | { emote: string; zero_widths: string[] })[] = []
 
   const words = message.split(" ")
+  const current_segment = []
   for (let i = 0; i < words.length; i++) {
     const word = words[i]
     const emote_type = is_emote(word)
     if (emote_type === null) {
-      message_parts.push(word)
+      current_segment.push(word)
     } else if (emote_type === EmoteType.NORMAL) {
+      if (current_segment.length > 0) {
+        message_parts.push(current_segment.join(" "))
+        current_segment.length = 0
+      }
       const zero_widths = []
       while (i + 1 < words.length) {
         const next_word = words[i + 1]
@@ -78,6 +83,9 @@
       throw new Error("encountered unexpected zero width emote when parsing message")
     }
   }
+  if (current_segment.length > 0) {
+    message_parts.push(current_segment.join(" "))
+  }
   console.log(message_parts)
 </script>
 
@@ -86,16 +94,20 @@
     line-break: normal;
     overflow-wrap: normal;
   }
+  .before-message {
+    margin-right: 0.2rem;
+  }
 </style>
 
 <div class="chat-message">
   <span style="color: #aaa; font-size: 12px">{format_timestamp(timestamp_ms)}</span>
+  <!-- no line break - can't have whitespace here -->
   <span style="color: {name_color}">{name}</span>:
   {#each message_parts as part}
     {#if typeof part === "string"}
-      {part}&nbsp;
+      <span>{part}</span>
     {:else}
-      <ChatMessageEmote name={part.emote} zero_widths={part.zero_widths} {twitch_emotes} {seventv_emotes} />&nbsp;
+      <ChatMessageEmote name={part.emote} zero_widths={part.zero_widths} {twitch_emotes} {seventv_emotes} />
     {/if}
   {/each}
 </div>

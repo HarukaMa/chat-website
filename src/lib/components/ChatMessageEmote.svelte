@@ -50,10 +50,19 @@
   })
 </script>
 
-<style>
+<style lang="scss">
   .chat-message-emote {
     display: inline-block;
     position: relative;
+    margin: 0 0.25rem;
+
+    &:nth-child(3) {
+      margin-left: 0;
+    }
+
+    &:last-child {
+      margin-right: 0;
+    }
   }
 
   .emote {
