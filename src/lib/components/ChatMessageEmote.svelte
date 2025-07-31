@@ -10,7 +10,7 @@
 
   let { name, twitch_emotes, seventv_emotes, zero_widths }: ChatMessageEmoteProps = $props()
 
-  function get_emote_urls(name: string): { url_1x: string; url_2x: string; url_3x: string | null; url_4x: string; width: number } {
+  function get_emote_urls(name: string): { url_1x: string; url_2x: string; url_3x: string; url_4x: string; width: number } {
     if (seventv_emotes) {
       // channel emotes
       let emote_data = seventv_emotes.vedal_emotes.emotes.get(name)
@@ -35,13 +35,12 @@
       const emote_data = twitch_emotes.get(name)
       if (emote_data !== undefined) {
         // there should be no missing urls here
-        const url_1x = emote_data.images.url_1x || ""
         const url_2x = emote_data.images.url_2x || ""
         const url_4x = emote_data.images.url_4x || ""
-        return { url_1x, url_2x, url_3x: null, url_4x, width: 32 }
+        return { url_1x: url_2x, url_2x: url_4x, url_3x: url_4x, url_4x, width: 32 }
       }
     }
-    return { url_1x: "", url_2x: "", url_3x: null, url_4x: "", width: 0 }
+    return { url_1x: "", url_2x: "", url_3x: "", url_4x: "", width: 0 }
   }
 
   const emote = { name: name, ...get_emote_urls(name) }
@@ -80,12 +79,8 @@
   }
 </style>
 
-{#snippet emote_snippet(url_1x: string, url_2x: string, url_3x: string | null, url_4x: string, name: string, width: number)}
-  {#if url_3x}
-    <img class="emote" src={url_1x} srcset="{url_1x} 1x, {url_2x} 2x, {url_3x} 3x, {url_4x} 4x" alt={name} style="width: {width}px" />
-  {:else}
-    <img class="emote" src={url_1x} srcset="{url_1x} 1x, {url_2x} 2x, {url_4x} 3x, {url_4x} 4x}" alt={name} style="width: {width}px" />
-  {/if}
+{#snippet emote_snippet(url_1x: string, url_2x: string, url_3x: string, url_4x: string, name: string, width: number)}
+  <img class="emote" src={url_1x} srcset="{url_1x} 1x, {url_2x} 2x, {url_3x} 3x, {url_4x} 4x" alt={name} style="width: {width}px" />
 {/snippet}
 
 <div class="chat-message-emote">
