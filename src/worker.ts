@@ -306,6 +306,10 @@ export class DO extends DurableObject<Env> {
           ws.send(JSON.stringify({ type: "error", message: "You can only send one message every 3 seconds" }))
           return
         }
+        if (msg.message.length > 500) {
+          ws.send(JSON.stringify({ type: "error", message: "Message too long" }))
+          return
+        }
         const result = this.ctx.storage.sql.exec<{ id: number }>(
           `INSERT INTO messages (name, message, timestamp_ms)
            VALUES (?, ?, ?) RETURNING id`,

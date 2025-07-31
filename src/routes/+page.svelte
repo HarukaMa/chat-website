@@ -9,7 +9,7 @@
 
   let { data } = $props()
   let session = $state(data.session)
-  let twitch_logged_in = $state(data.twitch_logged_in)
+  let twitch_logged_in = true // $state(data.twitch_logged_in)
   let name = $state(data.name)
   let name_color = $state(data.name_color)
   let twitch_emotes = $state(data.twitch_emotes)
@@ -79,7 +79,7 @@
   //   })
   // }
 
-  let chat_input: HTMLInputElement
+  let chat_input = $state("")
 
   let chat_ws: WebSocket | undefined
 
@@ -148,11 +148,17 @@
 
   async function handle_chat_keydown(e: KeyboardEvent) {
     if (e.key === "Enter") {
-      if (chat_input.value) {
-        console.log("chat input", chat_input.value)
-        await send_chat_message({ type: "send_message", message: chat_input.value })
-        chat_input.value = ""
-      }
+      console.log("chat input", chat_input)
+      // await send_chat_message({ type: "send_message", message: chat_input })
+      chat_input = ""
+    }
+  }
+
+  async function handle_chat_input() {
+    if (chat_input.length > 500) {
+      chat_input = chat_input.slice(0, 500)
+      const input = document.getElementById("chat-input-field") as HTMLInputElement
+      input.value = chat_input
     }
   }
 
@@ -284,9 +290,11 @@
     border: 1px solid #555;
     border-radius: 4px;
     height: 2rem;
+    align-items: end;
 
     input {
       flex: 1 1 auto;
+      height: 100%;
       border: 0;
       background-color: #333;
       caret-color: #ccc;
@@ -299,10 +307,17 @@
       }
     }
 
-    input:focus {
+    &:has(input:focus) {
       border: 1px solid #aaa;
       border-radius: 4px;
     }
+  }
+
+  #chat-input-counter {
+    color: #aaa;
+    font-size: 12px;
+    margin-right: 0.25rem;
+    margin-bottom: 0.25rem;
   }
 </style>
 
@@ -364,13 +379,20 @@
       <div id="chat-input">
         <div id="chat-input-area">
           <input
-            bind:this={chat_input}
+            id="chat-input-field"
+            bind:value={chat_input}
             type="text"
             name="message"
             placeholder={twitch_logged_in ? "Enter message" : "Login to chat"}
             disabled={!twitch_logged_in || !chat_authenticated || !chat_connected}
             onkeydown={handle_chat_keydown}
+            oninput={handle_chat_input}
           />
+          <div id="chat-input-counter">
+            {#if chat_input.length >= 300}
+              {500 - chat_input.length}
+            {/if}
+          </div>
         </div>
       </div>
     </div>
