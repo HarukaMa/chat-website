@@ -236,12 +236,13 @@
   #player {
     position: relative;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     width: 80%;
     background-color: black;
 
     iframe {
-      width: 100%;
+      flex: 1 1 auto;
       aspect-ratio: 16 / 9;
       margin: auto;
       border: 0;
@@ -249,7 +250,7 @@
   }
 
   #control-strip {
-    position: absolute;
+    flex: 0 0 auto;
     display: flex;
     justify-content: center;
     gap: 1rem;
