@@ -244,6 +244,7 @@
     iframe {
       flex: 1 1 auto;
       aspect-ratio: 16 / 9;
+      max-width: 100%;
       margin: auto;
       border: 0;
     }
