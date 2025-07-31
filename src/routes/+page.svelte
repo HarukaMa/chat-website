@@ -251,7 +251,8 @@
   #chat-container {
     display: flex;
     flex-direction: column;
-    flex: 1 1 auto;
+    width: 20%;
+    min-width: 20rem;
     background-color: #222;
     color: #eee;
   }
@@ -365,7 +366,7 @@
         {/if}
       </div>
       <div id="chat-messages">
-        {#each chat_messages as message}
+        {#each chat_messages as message (message)}
           <div>
             {#if typeof message === "string"}
               <em style="color: #aaa">{message}</em>
