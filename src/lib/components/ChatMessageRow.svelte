@@ -3,12 +3,15 @@
   import ChatMessageEmote from "$lib/components/ChatMessageEmote.svelte"
 
   type ChatMessageProps = {
+    id: number
     name: string
     name_color: string
     message: string
     timestamp_ms: number
     twitch_emotes: TwitchEmotes | null
     seventv_emotes: SevenTVEmoteSets | null
+    is_admin: boolean
+    delete_message: (id: number) => Promise<void>
   }
 
   enum EmoteType {
@@ -16,7 +19,7 @@
     ZERO_WIDTH,
   }
 
-  let { name, name_color, message, timestamp_ms, twitch_emotes, seventv_emotes }: ChatMessageProps = $props()
+  let { id, name, name_color, message, timestamp_ms, twitch_emotes, seventv_emotes, is_admin, delete_message }: ChatMessageProps = $props()
 
   function format_timestamp(timestamp_ms: number) {
     const date = new Date(timestamp_ms)
@@ -86,7 +89,10 @@
   if (current_segment.length > 0) {
     message_parts.push(current_segment.join(" "))
   }
-  console.log(message_parts)
+
+  async function delete_this_message() {
+    await delete_message(id)
+  }
 </script>
 
 <style>
@@ -94,12 +100,12 @@
     line-break: normal;
     overflow-wrap: normal;
   }
-  .before-message {
-    margin-right: 0.2rem;
-  }
 </style>
 
 <div class="chat-message">
+  {#if is_admin}
+    <span style="color: #aaa; font-size: 12px" onclick={delete_this_message}>⨯</span>
+  {/if}
   <span style="color: #aaa; font-size: 12px">{format_timestamp(timestamp_ms)}</span>
   <!-- no line break - can't have whitespace here -->
   <span style="color: {name_color}">{name}</span>:

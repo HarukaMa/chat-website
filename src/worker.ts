@@ -14,13 +14,20 @@ export type ChatMessage = {
 
 export type WSMessageType =
   | { type: "new_message"; message: ChatMessage }
+  | { type: "message_history"; messages: ChatMessage[] }
+  | { type: "message_deleted"; id: number }
+  | { type: "user_timed_out"; name: string; duration: number }
+  | { type: "user_banned"; name: string }
   | { type: "user_join"; name: string }
   | { type: "user_leave"; name: string }
-  | { type: "user_list"; users?: string[] }
   | { type: "authenticate"; session: string }
   | { type: "send_message"; message: string }
+  | { type: "delete_message"; id: number }
+  | { type: "timeout_user"; name: string; duration: number }
+  | { type: "ban_user"; name: string }
+  | { type: "unban_user"; name: string }
+  | { type: "user_list"; users?: string[] }
   | { type: "history_request" }
-  | { type: "message_history"; messages: ChatMessage[] }
   | { type: "error"; message: string }
 
 export type Session = {
@@ -162,6 +169,8 @@ export type SevenTVEmoteSetCache = {
 /** A Durable Object's behavior is defined in an exported Javascript class */
 export class DO extends DurableObject<Env> {
   sessions: Map<WebSocket, Session>
+  admins: string[]
+  commands: Map<string, (msg: WSMessageType, session: Session, ws: WebSocket) => Promise<void>>
 
   /**
    * The constructor is invoked once upon creation of the Durable Object, i.e. the first call to
@@ -178,6 +187,15 @@ export class DO extends DurableObject<Env> {
       this.sessions.set(ws, session)
     })
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("PING", "PONG"))
+
+    // hardcoded admin list for now...
+    this.admins = ["haruka_ff"]
+
+    this.commands = new Map([
+      ["/timeout", this.command_timeout_user],
+      ["/ban", this.command_ban_user],
+      ["/unban", this.command_unban_user],
+    ])
 
     this.init_database()
     this.ctx.storage.getAlarm().then((alarm_time) => {
@@ -264,108 +282,32 @@ export class DO extends DurableObject<Env> {
         break
 
       case "authenticate": {
-        if (!("session" in msg)) {
-          ws.close(1007, "invalid message content")
-          return
-        }
-        if (session.authenticated) {
-          ws.send(JSON.stringify({ type: "error", message: "Already authenticated" }))
-          return
-        }
-        let token = await this.ctx.storage.get<TwitchUserToken>(`twitch_user_token_${msg.session}`)
-        if (token === undefined) {
-          ws.send(JSON.stringify({ type: "error", message: "Twitch account not linked" }))
-          return
-        }
-        if (token.expires_at < Date.now() / 1000) {
-          try {
-            token = await this.twitch_refresh_user_token(token)
-            await this.ctx.storage.put(`twitch_user_token_${msg.session}`, token)
-          } catch (e) {
-            console.error("ERROR: failed to refresh token: ", e)
-            ws.send(JSON.stringify({ type: "error", message: "Failed to authenticate with twitch" }))
-            await this.ctx.storage.delete(`twitch_user_token_${msg.session}`)
-            return
-          }
-        }
-        session.name = await this.twitch_get_user_name(token, msg.session)
-        session.authenticated = true
-        ws.serializeAttachment(session)
-        this.broadcast({ type: "user_join", name: session.name })
+        await this.ws_authenticate(msg, session, ws)
         break
       }
 
       case "send_message": {
-        if (!session.authenticated) {
-          ws.close(1007, "unauthenticated")
-          return
-        }
-        if (!("message" in msg)) {
-          ws.close(1007, "invalid message content")
-          return
-        }
-        const last_message_time = await this.ctx.storage.get<number>(`last_message_time_${session.name}`)
-        const now = Date.now()
-        if (last_message_time !== undefined && now - last_message_time < 3000) {
-          ws.send(JSON.stringify({ type: "error", message: "You can only send one message every 3 seconds" }))
-          return
-        }
-        if (msg.message.length > 500) {
-          ws.send(JSON.stringify({ type: "error", message: "Message too long" }))
-          return
-        }
-        const result = this.ctx.storage.sql.exec<{ id: number }>(
-          `INSERT INTO messages (name, message, timestamp_ms)
-           VALUES (?, ?, ?) RETURNING id`,
-          ...[session.name, msg.message, now],
-        )
-        let id: number | undefined
-        for (const row of result) {
-          id = row.id
-        }
-        if (id === undefined) {
-          ws.send(JSON.stringify({ type: "error", message: "Failed to store message" }))
-          return
-        }
-        let color = await this.ctx.storage.get<string>(`twitch_user_color_${session.name}`)
-        if (color === undefined) {
-          color = ""
-        }
-        await this.ctx.storage.put(`last_message_time_${session.name}`, now)
-        this.broadcast({
-          type: "new_message",
-          message: { id, name: session.name, name_color: color, message: msg.message, timestamp_ms: now },
-        })
+        await this.ws_send_message(msg, session, ws)
         break
       }
 
       case "history_request": {
-        if (session.history_requested) {
-          ws.send(JSON.stringify({ type: "error", message: "History already requested" }))
-          return
-        }
-        session.history_requested = true
-        ws.serializeAttachment(session)
-        const messages = this.ctx.storage.sql.exec<{ id: number; name: string; message: string; timestamp_ms: number }>(
-          `SELECT id, name, message, timestamp_ms
-           FROM messages
-           ORDER BY timestamp_ms`,
-        )
-        const history_messages: ChatMessage[] = []
-        const name_color_cache = new Map<string, string>()
-        for (const db_message of messages) {
-          const { id, name, message, timestamp_ms } = db_message
-          let name_color = name_color_cache.get(name)
-          if (name_color === undefined) {
-            name_color = await this.ctx.storage.get<string>(`twitch_user_color_${name}`)
-            if (name_color === undefined) {
-              name_color = ""
-            }
-            name_color_cache.set(name, name_color)
-          }
-          history_messages.push({ id, name, name_color, message, timestamp_ms })
-        }
-        ws.send(JSON.stringify({ type: "message_history", messages: history_messages }))
+        await this.ws_history_request(msg, session, ws)
+        break
+      }
+
+      case "delete_message": {
+        await this.ws_delete_message(msg, session, ws)
+        break
+      }
+
+      case "timeout_user": {
+        await this.ws_timeout_user(msg, session, ws)
+        break
+      }
+
+      case "ban_user": {
+        await this.ws_ban_user(msg, session, ws)
         break
       }
 
@@ -373,6 +315,265 @@ export class DO extends DurableObject<Env> {
         ws.close(1007, "invalid message type")
         return
     }
+  }
+
+  async ws_authenticate(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (!("session" in msg)) {
+      ws.close(1007, "invalid message content")
+      return
+    }
+    if (session.authenticated) {
+      ws.send(JSON.stringify({ type: "error", message: "Already authenticated" }))
+      return
+    }
+    let token = await this.ctx.storage.get<TwitchUserToken>(`twitch_user_token_${msg.session}`)
+    if (token === undefined) {
+      ws.send(JSON.stringify({ type: "error", message: "Twitch account not linked" }))
+      return
+    }
+    if (token.expires_at < Date.now() / 1000) {
+      try {
+        token = await this.twitch_refresh_user_token(token)
+        await this.ctx.storage.put(`twitch_user_token_${msg.session}`, token)
+      } catch (e) {
+        console.error("ERROR: failed to refresh token: ", e)
+        ws.send(JSON.stringify({ type: "error", message: "Failed to authenticate with twitch" }))
+        await this.ctx.storage.delete(`twitch_user_token_${msg.session}`)
+        return
+      }
+    }
+    session.name = await this.twitch_get_user_name(token, msg.session)
+    session.authenticated = true
+    ws.serializeAttachment(session)
+    this.broadcast({ type: "user_join", name: session.name })
+  }
+
+  async ws_send_message(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (msg.type !== "send_message") {
+      return
+    }
+    if (!session.authenticated) {
+      ws.close(1007, "unauthenticated")
+      return
+    }
+    if (!("message" in msg)) {
+      ws.close(1007, "invalid message content")
+      return
+    }
+    const user_timeout = await this.ctx.storage.get<number>(`timeout_${session.name}`)
+    if (user_timeout !== undefined && user_timeout > Date.now()) {
+      ws.send(JSON.stringify({ type: "error", message: "You are currently timed out" }))
+      return
+    }
+    const last_message_time = await this.ctx.storage.get<number>(`last_message_time_${session.name}`)
+    const now = Date.now()
+    if (last_message_time !== undefined && now - last_message_time < 3000) {
+      ws.send(JSON.stringify({ type: "error", message: "You can only send one message every 3 seconds" }))
+      return
+    }
+    if (msg.message.length > 500) {
+      ws.send(JSON.stringify({ type: "error", message: "Message too long" }))
+      return
+    }
+
+    if (msg.message.startsWith("/")) {
+      const command = msg.message.split(" ")[0]
+      const command_func = this.commands.get(command)
+      if (command_func !== undefined) {
+        await command_func(msg, session, ws)
+        return
+      }
+      ws.send(JSON.stringify({ type: "error", message: "Unknown command" }))
+      return
+    }
+
+    const result = this.ctx.storage.sql.exec<{ id: number }>(
+      `INSERT INTO messages (name, message, timestamp_ms)
+           VALUES (?, ?, ?) RETURNING id`,
+      ...[session.name, msg.message, now],
+    )
+    let id: number | undefined
+    for (const row of result) {
+      id = row.id
+    }
+    if (id === undefined) {
+      ws.send(JSON.stringify({ type: "error", message: "Failed to store message" }))
+      return
+    }
+    let color = await this.ctx.storage.get<string>(`twitch_user_color_${session.name}`)
+    if (color === undefined) {
+      color = ""
+    }
+    await this.ctx.storage.put(`last_message_time_${session.name}`, now)
+    this.broadcast({
+      type: "new_message",
+      message: { id, name: session.name, name_color: color, message: msg.message, timestamp_ms: now },
+    })
+  }
+
+  async ws_history_request(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (session.history_requested) {
+      ws.send(JSON.stringify({ type: "error", message: "History already requested" }))
+      return
+    }
+    session.history_requested = true
+    ws.serializeAttachment(session)
+    const messages = this.ctx.storage.sql.exec<{ id: number; name: string; message: string; timestamp_ms: number }>(
+      `SELECT id, name, message, timestamp_ms
+           FROM messages
+           ORDER BY timestamp_ms`,
+    )
+    const history_messages: ChatMessage[] = []
+    const name_color_cache = new Map<string, string>()
+    for (const db_message of messages) {
+      const { id, name, message, timestamp_ms } = db_message
+      let name_color = name_color_cache.get(name)
+      if (name_color === undefined) {
+        name_color = await this.ctx.storage.get<string>(`twitch_user_color_${name}`)
+        if (name_color === undefined) {
+          name_color = ""
+        }
+        name_color_cache.set(name, name_color)
+      }
+      history_messages.push({ id, name, name_color, message, timestamp_ms })
+    }
+    ws.send(JSON.stringify({ type: "message_history", messages: history_messages }))
+  }
+
+  async ws_delete_message(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (msg.type !== "delete_message") {
+      return
+    }
+    if (!session.authenticated) {
+      ws.close(1007, "unauthenticated")
+      return
+    }
+    if (this.admins.indexOf(session.name) === -1) {
+      ws.close(1007, "unauthorized")
+      return
+    }
+    if (!("id" in msg)) {
+      ws.close(1007, "invalid message content")
+      return
+    }
+    this.ctx.storage.sql.exec(`DELETE FROM messages WHERE id = ?`, ...[msg.id])
+    this.broadcast({ type: "message_deleted", id: msg.id })
+  }
+
+  async ws_timeout_user(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (msg.type !== "timeout_user") {
+      return
+    }
+    if (!session.authenticated) {
+      ws.close(1007, "unauthenticated")
+      return
+    }
+    if (this.admins.indexOf(session.name) === -1) {
+      ws.close(1007, "unauthorized")
+      return
+    }
+    await this.timeout_user(msg.name, msg.duration, ws)
+  }
+
+  async command_timeout_user(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (msg.type !== "send_message") {
+      return
+    }
+    if (this.admins.indexOf(session.name) === -1) {
+      ws.close(1007, "unauthorized")
+      return
+    }
+    const message_parts = msg.message.split(" ")
+    if (message_parts.length < 3) {
+      ws.send(JSON.stringify({ type: "error", message: "Invalid command format (/timeout <user> <duration>)" }))
+      return
+    }
+    await this.timeout_user(message_parts[1], parseInt(message_parts[2]), ws)
+  }
+
+  async timeout_user(name: string, duration: number, ws: WebSocket) {
+    if (this.admins.indexOf(name) !== -1) {
+      ws.send(JSON.stringify({ type: "error", message: "You cannot timeout other admins" }))
+      return
+    }
+    await this.ctx.storage.put(`timeout_${name}`, Date.now() + duration * 1000)
+    this.broadcast({ type: "user_timed_out", name, duration })
+  }
+
+  async ws_ban_user(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (msg.type !== "ban_user") {
+      return
+    }
+    if (!session.authenticated) {
+      ws.close(1007, "unauthenticated")
+      return
+    }
+    if (this.admins.indexOf(session.name) === -1) {
+      ws.close(1007, "unauthorized")
+      return
+    }
+    await this.ban_user(msg.name, ws)
+  }
+
+  async command_ban_user(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (msg.type !== "send_message") {
+      return
+    }
+    if (this.admins.indexOf(session.name) === -1) {
+      ws.close(1007, "unauthorized")
+      return
+    }
+    const message_parts = msg.message.split(" ")
+    if (message_parts.length < 2) {
+      ws.send(JSON.stringify({ type: "error", message: "Invalid command format (/ban <user>)" }))
+      return
+    }
+    await this.ban_user(message_parts[1], ws)
+  }
+
+  async ban_user(name: string, ws: WebSocket) {
+    if (this.admins.indexOf(name) !== -1) {
+      ws.send(JSON.stringify({ type: "error", message: "You cannot ban other admins" }))
+      return
+    }
+    await this.ctx.storage.put(`ban_${name}`, true)
+    this.broadcast({ type: "user_banned", name })
+  }
+
+  async ws_unban_user(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (msg.type !== "unban_user") {
+      return
+    }
+    if (!session.authenticated) {
+      ws.close(1007, "unauthenticated")
+      return
+    }
+    if (this.admins.indexOf(session.name) === -1) {
+      ws.close(1007, "unauthorized")
+      return
+    }
+    await this.unban_user(msg.name, ws)
+  }
+
+  async command_unban_user(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (msg.type !== "send_message") {
+      return
+    }
+    if (this.admins.indexOf(session.name) === -1) {
+      ws.close(1007, "unauthorized")
+      return
+    }
+    const message_parts = msg.message.split(" ")
+    if (message_parts.length < 2) {
+      ws.send(JSON.stringify({ type: "error", message: "Invalid command format (/unban <user>)" }))
+      return
+    }
+    await this.unban_user(message_parts[1], ws)
+  }
+
+  async unban_user(name: string, ws: WebSocket) {
+    await this.ctx.storage.delete(`ban_${name}`)
+    ws.send(JSON.stringify({ type: "error", message: `User ${name} has been unbanned` }))
   }
 
   async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
@@ -706,6 +907,10 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
     await this.ctx.storage.delete("twitch_emotes")
     await this.ctx.storage.delete("seventv_emotes")
     return new Response("OK")
+  }
+
+  admin_list(): string[] {
+    return this.admins
   }
 
   alarm(_alarmInfo?: AlarmInvocationInfo): void | Promise<void> {

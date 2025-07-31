@@ -15,6 +15,8 @@
   let name_color = $state(data.name_color)
   let twitch_emotes = $state(data.twitch_emotes)
   let seventv_emotes = $state(data.seventv_emotes)
+  let admins = $state(data.admins)
+  let is_admin = $derived(admins.includes(name || ""))
 
   let stream_disconnected = $state(false)
 
@@ -140,6 +142,12 @@
       case "user_leave":
         console.log("user left:", message.name)
         break
+      case "user_timed_out":
+        chat_messages.push(`${message.name} has been timed out for ${message.duration} seconds`)
+        break
+      case "user_banned":
+        chat_messages.push(`${message.name} has been banned`)
+        break
       case "error":
         console.log("chat error:", message.message)
         chat_messages.push(message.message)
@@ -161,6 +169,10 @@
       const input = document.getElementById("chat-input-field") as HTMLInputElement
       input.value = chat_input
     }
+  }
+
+  async function delete_message(id) {
+    await send_chat_message({ type: "delete_message", id })
   }
 </script>
 
@@ -234,11 +246,11 @@
     color: #eee;
   }
 
-  #stats {
-    flex: 1 1 auto;
-    text-align: right;
-    font-family: monospace;
-  }
+  //#stats {
+  //  flex: 1 1 auto;
+  //  text-align: right;
+  //  font-family: monospace;
+  //}
 
   #chat-container {
     display: flex;
@@ -363,7 +375,7 @@
             {#if typeof message === "string"}
               <em style="color: #aaa">{message}</em>
             {:else}
-              <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} />
+              <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} {is_admin} {delete_message} />
             {/if}
           </div>
         {/each}

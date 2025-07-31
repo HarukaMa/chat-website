@@ -8,6 +8,7 @@ export const load: PageServerLoad = async ({ platform, cookies }) => {
   let name_color: string | null = null
   let twitch_emotes: TwitchEmotes | null = null
   let seventv_emotes: SevenTVEmoteSets | null = null
+  let admins: string[] = []
 
   if (session && platform) {
     const id = platform.env.DO.idFromName("chat")
@@ -20,6 +21,7 @@ export const load: PageServerLoad = async ({ platform, cookies }) => {
     }
     twitch_emotes = await stub.twitch_emotes()
     seventv_emotes = await stub.seventv_emotes()
+    admins = await stub.admin_list()
   }
 
   return {
@@ -29,5 +31,6 @@ export const load: PageServerLoad = async ({ platform, cookies }) => {
     name_color,
     twitch_emotes,
     seventv_emotes,
+    admins,
   }
 }
