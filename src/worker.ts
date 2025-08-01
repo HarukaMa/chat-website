@@ -184,9 +184,9 @@ export class DO extends DurableObject<Env> {
     this.admins = ["haruka_ff"]
 
     this.commands = new Map([
-      ["/timeout", this.command_timeout_user],
-      ["/ban", this.command_ban_user],
-      ["/unban", this.command_unban_user],
+      ["/timeout", this.command_timeout_user.bind(this)],
+      ["/ban", this.command_ban_user.bind(this)],
+      ["/unban", this.command_unban_user.bind(this)],
     ])
 
     this.init_database()
