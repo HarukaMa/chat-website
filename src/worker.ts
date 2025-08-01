@@ -309,7 +309,7 @@ export class DO extends DurableObject<Env> {
       }
 
       case "get_connection_count":
-        ws.send(JSON.stringify({ type: "connection_count", count: this.sessions.size }))
+        ws.send(JSON.stringify({ type: "connection_count", count: this.ctx.getWebSockets().length }))
         break
 
       default:
