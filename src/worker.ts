@@ -643,6 +643,11 @@ export class DO extends DurableObject<Env> {
   }
 
   private async twitch_get_user_name(twitch_token: TwitchUserToken, session: string): Promise<string> {
+    const cache_expires = await this.ctx.storage.get<number>(`twitch_user_cache_expires_${session}`)
+    if (cache_expires !== undefined && cache_expires > Date.now() / 1000) {
+      await this.ctx.storage.delete(`twitch_user_name_${session}`)
+      await this.ctx.storage.delete(`twitch_user_color_${session}`)
+    }
     let display_name = await this.ctx.storage.get<string>(`twitch_user_name_${session}`)
     let user_id: string | undefined
     if (display_name === undefined) {
@@ -660,6 +665,7 @@ export class DO extends DurableObject<Env> {
       display_name = json.data[0].display_name
       user_id = json.data[0].id
       await this.ctx.storage.put(`twitch_user_name_${session}`, display_name)
+      await this.ctx.storage.put(`twitch_user_cache_expires_${session}`, Date.now() / 1000 + 3600)
     }
     let name_color = await this.ctx.storage.get<string>(`twitch_user_color_${display_name}`)
     if (name_color === undefined) {
