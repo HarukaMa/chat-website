@@ -2,6 +2,7 @@
   import { env } from "$env/dynamic/public"
   import { browser } from "$app/environment"
   import twitch_logo from "$lib/assets/glitch_flat_black-ops.svg"
+  import users_icon from "$lib/assets/fa-users.svg"
   import pkg from "@eyevinn/webrtc-player"
   import { onMount } from "svelte"
   import type { ChatMessage, WSMessageType } from "../worker"
@@ -27,6 +28,8 @@
   let chat_connected = $state(false)
   let chat_reconnecting = $state(false)
   let chat_authenticated = $state(false)
+  let chat_session_count = $state(0)
+  let chat_session_count_task_id: NodeJS.Timeout | undefined
 
   let chat_should_scroll_to_bottom = $state(true)
 
@@ -121,18 +124,28 @@
         chat_authenticated = true
       }
       await send_chat_message({ type: "history_request" })
+      if (chat_session_count_task_id) {
+        clearInterval(chat_session_count_task_id)
+      }
+      await send_chat_message({ type: "get_connection_count" })
+      chat_session_count_task_id = setInterval(async () => {
+        await send_chat_message({ type: "get_connection_count" })
+      }, 30000)
     }
     chat_ws.onclose = () => {
       console.log("chat disconnected")
       chat_messages.push("disconnected from chat server")
       chat_connected = false
+      if (chat_session_count_task_id) {
+        clearInterval(chat_session_count_task_id)
+        chat_session_count_task_id = undefined
+      }
       reconnect_chat()
     }
     chat_ws.onerror = (e) => {
       console.log("chat error", e)
       chat_messages.push(`disconnected from chat server with error: ${e}`)
       chat_connected = false
-      reconnect_chat()
     }
     chat_ws.onmessage = (e) => {
       console.log("chat message", e)
@@ -170,6 +183,9 @@
         break
       case "user_banned":
         chat_messages.push(`${message.name} has been banned`)
+        break
+      case "connection_count":
+        chat_session_count = message.count
         break
       case "error":
         console.log("chat error:", message.message)
@@ -418,6 +434,17 @@
     align-items: center;
     gap: 0.5rem;
     flex: 0 0 auto;
+    font-size: 14px;
+  }
+
+  #chat-connection-status {
+    flex: 1 1 auto;
+  }
+
+  #chat-session-count {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   #chat-messages {
@@ -529,18 +556,26 @@
     </div>
     <div id="chat-container">
       <div id="chat-status">
-        {#if chat_connected}
-          Connected
-          {#if !twitch_logged_in}
-            - Guest
-          {:else if chat_authenticated}
-            - Authenticated
+        <span id="chat-connection-status">
+          {#if chat_connected}
+            Connected
+            {#if !twitch_logged_in}
+              - Guest
+            {:else if chat_authenticated}
+              - Authenticated
+            {/if}
+          {:else}
+            Disconnected
           {/if}
-        {:else}
-          Disconnected
-        {/if}
-        {#if chat_reconnecting}
-          &nbsp;(Auto-reconnect in {chat_reconnection_timeout}s)
+          {#if chat_reconnecting}
+            &nbsp;(Auto-reconnect in {chat_reconnection_timeout}s)
+          {/if}
+        </span>
+        {#if chat_session_count > 0}
+          <div id="chat-session-count">
+            <img src={users_icon} alt="Chat users" />
+            {chat_session_count}
+          </div>
         {/if}
       </div>
       <div id="chat-messages" bind:this={chat_messages_container} onscroll={on_chat_scroll}>

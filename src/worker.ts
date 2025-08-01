@@ -13,6 +13,7 @@ export type ChatMessage = {
 }
 
 export type WSMessageType =
+  // server -> client
   | { type: "new_message"; message: ChatMessage }
   | { type: "message_history"; messages: ChatMessage[] }
   | { type: "message_deleted"; id: number }
@@ -20,6 +21,8 @@ export type WSMessageType =
   | { type: "user_banned"; name: string }
   | { type: "user_join"; name: string }
   | { type: "user_leave"; name: string }
+  | { type: "connection_count"; count: number }
+  // client -> server
   | { type: "authenticate"; session: string }
   | { type: "send_message"; message: string }
   | { type: "delete_message"; id: number }
@@ -28,6 +31,8 @@ export type WSMessageType =
   | { type: "unban_user"; name: string }
   | { type: "user_list"; users?: string[] }
   | { type: "history_request" }
+  | { type: "get_connection_count" }
+  // error
   | { type: "error"; message: string }
 
 export type Session = {
@@ -181,7 +186,7 @@ export class DO extends DurableObject<Env> {
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("PING", "PONG"))
 
     // hardcoded admin list for now...
-    this.admins = ["haruka_ff", "boop_dot"]
+    this.admins = ["haruka_ff", "boop_dot", "key0__0"]
 
     this.commands = new Map([
       ["/timeout", this.command_timeout_user.bind(this)],
@@ -302,6 +307,10 @@ export class DO extends DurableObject<Env> {
         await this.ws_ban_user(msg, session, ws)
         break
       }
+
+      case "get_connection_count":
+        ws.send(JSON.stringify({ type: "connection_count", count: this.sessions.size }))
+        break
 
       default:
         ws.close(1007, "invalid message type")
