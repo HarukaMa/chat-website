@@ -350,7 +350,7 @@
     overflow-y: scroll;
     padding: 0.5rem;
     font-size: 14px;
-    line-height: 1.25rem;
+    line-height: 1.5rem;
   }
 
   #chat-input {
