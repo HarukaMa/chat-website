@@ -439,7 +439,7 @@ export class DO extends DurableObject<Env> {
       }
       history_messages.push({ id, name, name_color, message, timestamp_ms })
     }
-    ws.send(JSON.stringify({ type: "message_history", messages: history_messages.toReversed() }))
+    ws.send(JSON.stringify({ type: "message_history", messages: history_messages }))
   }
 
   async ws_delete_message(msg: WSMessageType, session: Session, ws: WebSocket) {
