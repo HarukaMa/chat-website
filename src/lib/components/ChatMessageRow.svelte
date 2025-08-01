@@ -58,7 +58,7 @@
     const emote_type = is_emote(word)
     if (emote_type === null) {
       current_segment.push(word)
-    } else if (emote_type === EmoteType.NORMAL) {
+    } else {
       if (current_segment.length > 0) {
         message_parts.push(current_segment.join(" "))
         current_segment.length = 0
@@ -75,8 +75,6 @@
         }
       }
       message_parts.push({ emote: word, zero_widths })
-    } else {
-      throw new Error("encountered unexpected zero width emote when parsing message")
     }
   }
   if (current_segment.length > 0) {
