@@ -108,6 +108,7 @@
   .chat-message {
     line-break: normal;
     overflow-wrap: anywhere;
+    padding: 0.25rem;
   }
 
   .chat-mentioned {
