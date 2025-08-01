@@ -487,7 +487,7 @@
             id="chat-input-field"
             bind:this={chat_input_element}
             data-placeholder={twitch_logged_in ? "Enter message" : "Login to chat"}
-            contenteditable={twitch_logged_in && chat_authenticated && chat_connected}
+            contenteditable={twitch_logged_in && chat_authenticated && chat_connected ? "plaintext-only" : "false"}
             onkeydown={handle_chat_keydown}
             oninput={handle_chat_input}
           ></span>
