@@ -352,6 +352,11 @@ export class DO extends DurableObject<Env> {
       ws.close(1007, "invalid message content")
       return
     }
+    const user_ban = await this.ctx.storage.get<boolean>(`ban_${session.name}`)
+    if (user_ban) {
+      ws.send(JSON.stringify({ type: "error", message: "You are banned from chat" }))
+      return
+    }
     const user_timeout = await this.ctx.storage.get<number>(`timeout_${session.name}`)
     if (user_timeout !== undefined && user_timeout > Date.now()) {
       ws.send(JSON.stringify({ type: "error", message: "You are currently timed out" }))
