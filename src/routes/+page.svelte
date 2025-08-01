@@ -214,6 +214,7 @@
     if (input === "") return
     if (emote_partial === "") {
       emote_partial = input.split(" ").pop()?.toLowerCase() ?? ("" as string)
+      if (emote_partial === "") return
       emote_candidates =
         seventv_emotes
           ?.keys()
