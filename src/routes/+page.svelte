@@ -152,11 +152,12 @@
     switch (message.type) {
       case "message_history":
         chat_messages = message.messages
-        // scroll_to_bottom()
         break
       case "new_message":
         chat_messages.push(message.message)
-        // scroll_to_bottom()
+        if (chat_messages.length > 500) {
+          chat_messages = chat_messages.slice(-500)
+        }
         break
       case "user_join":
         console.log("user joined:", message.name)
@@ -166,16 +167,13 @@
         break
       case "user_timed_out":
         chat_messages.push(`${message.name} has been timed out for ${message.duration} seconds`)
-        // scroll_to_bottom()
         break
       case "user_banned":
         chat_messages.push(`${message.name} has been banned`)
-        // scroll_to_bottom()
         break
       case "error":
         console.log("chat error:", message.message)
         chat_messages.push(message.message)
-        // scroll_to_bottom()
         break
       case "message_deleted":
         message_deleted(message.id)
@@ -184,18 +182,95 @@
   }
 
   async function handle_chat_keydown(e: KeyboardEvent) {
+    if (!chat_input_element) return
+    const input = chat_input_element.innerText
     if (e.key === "Enter") {
       e.preventDefault()
-      if (chat_input_element.innerText.trim() === "") return
-      console.log("chat input", chat_input_element.innerText)
-      await send_chat_message({ type: "send_message", message: chat_input_element.innerText })
+      if (input.trim() === "") return
+      console.log("chat input", input)
+      await send_chat_message({ type: "send_message", message: input })
       chat_input_element.innerText = ""
+    } else if (e.key === "Tab") {
+      e.preventDefault()
+      if (input.endsWith("@")) {
+        // autocomplete users
+      } else {
+        autocomplete_emote(input)
+      }
+    } else {
+      emote_partial = ""
+      emote_candidates = []
+      emote_current_index = 0
+      emote_first_tab = true
     }
   }
 
+  let emote_partial = ""
+  let emote_candidates: string[] = []
+  let emote_current_index = 0
+  let emote_first_tab = true
+
+  function autocomplete_emote(input: string) {
+    if (input === "") return
+    if (emote_partial === "") {
+      emote_partial = input.split(" ").pop()?.toLowerCase() ?? ("" as string)
+      emote_candidates =
+        seventv_emotes
+          ?.keys()
+          .filter((emote) => emote.toLowerCase().startsWith(emote_partial))
+          .toArray() ?? []
+      emote_candidates = emote_candidates.concat(
+        twitch_emotes
+          ?.keys()
+          .filter((emote) => emote.toLowerCase().startsWith(emote_partial))
+          .toArray() ?? [],
+      )
+    }
+    console.log("emote partial", emote_partial)
+    console.log("emote candidates", emote_candidates)
+    if (emote_candidates.length === 0) return
+    console.log("emote current index", emote_current_index)
+    const current_selection = window.getSelection() ?? new Selection()
+    const current_range = current_selection.getRangeAt(0)
+    console.log("current selection", current_selection)
+    console.log("current range", current_range)
+    const input_cursor = current_range.startOffset
+    let backtrack_length = emote_partial.length
+    if (!emote_first_tab) {
+      let previous_index = emote_current_index - 1
+      if (emote_current_index === 0) {
+        previous_index = emote_candidates.length - 1
+      }
+      const previous_emote = emote_candidates[previous_index]
+      console.log("previous emote", previous_emote)
+      backtrack_length = previous_emote.length
+    }
+    console.log("backtrack length", backtrack_length)
+    emote_first_tab = false
+    const input_before_cursor = input.slice(0, input_cursor - backtrack_length)
+    console.log("input before cursor", input_before_cursor)
+    const input_after_cursor = input.slice(input_cursor)
+    console.log("input after cursor", input_after_cursor)
+    const emote_next_candidate = emote_candidates[emote_current_index]
+    console.log("emote next candidate", emote_next_candidate)
+    chat_input_element.innerText = input_before_cursor + emote_next_candidate + input_after_cursor
+    console.log("chat input", chat_input_element.innerText)
+    const range = document.createRange()
+    range.setStart(chat_input_element.childNodes[0], input_before_cursor.length + emote_next_candidate.length)
+    console.log("range start", input_before_cursor.length + emote_next_candidate.length)
+    range.collapse(true)
+    const selection = window.getSelection()
+    selection.removeAllRanges()
+    selection.addRange(range)
+    emote_current_index = (emote_current_index + 1) % emote_candidates.length
+    console.log("emote next index", emote_current_index)
+  }
+
   async function handle_chat_input() {
-    if (chat_input_element.innerText.length > 500) {
-      chat_input_element.innerText = chat_input_element.innerText.slice(0, 500)
+    if (!chat_input_element) return
+    const input = chat_input_element.innerText
+    if (input.length > 500) {
+      chat_input_element.innerText = input.slice(0, 500)
       const range = document.createRange()
       range.setStart(chat_input_element, 1)
       range.collapse(true)
@@ -204,7 +279,7 @@
       selection.addRange(range)
       chat_input_element.focus()
     }
-    chat_input_length = chat_input_element.innerText.length
+    chat_input_length = input.length
     if (chat_input_element.innerHTML === "<br>") {
       chat_input_element.innerHTML = ""
     }

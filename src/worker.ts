@@ -422,7 +422,8 @@ export class DO extends DurableObject<Env> {
     const messages = this.ctx.storage.sql.exec<{ id: number; name: string; message: string; timestamp_ms: number }>(
       `SELECT id, name, message, timestamp_ms
            FROM messages
-           ORDER BY timestamp_ms`,
+           ORDER BY timestamp_ms
+           LIMIT 500`,
     )
     const history_messages: ChatMessage[] = []
     const name_color_cache = new Map<string, string>()
@@ -438,7 +439,7 @@ export class DO extends DurableObject<Env> {
       }
       history_messages.push({ id, name, name_color, message, timestamp_ms })
     }
-    ws.send(JSON.stringify({ type: "message_history", messages: history_messages }))
+    ws.send(JSON.stringify({ type: "message_history", messages: history_messages.toReversed() }))
   }
 
   async ws_delete_message(msg: WSMessageType, session: Session, ws: WebSocket) {
