@@ -181,7 +181,7 @@ export class DO extends DurableObject<Env> {
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("PING", "PONG"))
 
     // hardcoded admin list for now...
-    this.admins = ["haruka_ff"]
+    this.admins = ["haruka_ff", "boop_dot"]
 
     this.commands = new Map([
       ["/timeout", this.command_timeout_user.bind(this)],
