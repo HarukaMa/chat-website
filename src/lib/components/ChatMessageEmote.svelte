@@ -14,6 +14,7 @@
   let { name, twitch_emotes, seventv_emotes, zero_widths }: ChatMessageEmoteProps = $props()
 
   let root_element: HTMLDivElement
+  let popup_element: HTMLDivElement
 
   function get_emote_data(name: string): {
     url_1x: string
@@ -52,20 +53,22 @@
   })
   const max_width = Math.max(emote.width, ...zw_emotes.map((zw) => zw.width))
 
-  const popup_attachment: Attachment = (node) => {
-    console.log(node, root_element)
-    computePosition(root_element, node as HTMLElement, {
-      strategy: "absolute",
+  function show_popup() {
+    popup_element.style.display = "flex"
+    computePosition(root_element, popup_element, {
+      strategy: "fixed",
       placement: "bottom",
       middleware: [flip(), shift(), offset(4)],
     }).then(({ x, y }) => {
-      console.log(x, y)
-      Object.assign((node as HTMLElement).style, {
+      Object.assign(popup_element.style, {
         left: `${x}px`,
         top: `${y}px`,
-        display: "none",
       })
     })
+  }
+
+  function hide_popup() {
+    popup_element.style.display = "none"
   }
 </script>
 
@@ -84,10 +87,6 @@
     &:last-child {
       margin-right: 0;
     }
-
-    &:hover + .popup {
-      display: flex !important;
-    }
   }
 
   .emote {
@@ -104,9 +103,10 @@
 
   .popup {
     background-color: #000000c0;
+    display: none;
     flex-direction: column;
     align-items: center;
-    position: absolute;
+    position: fixed;
     padding: 0.5rem;
     width: max-content;
     z-index: 1000;
@@ -151,13 +151,13 @@
   </div>
 {/snippet}
 
-<div class="chat-message-emote" bind:this={root_element}>
+<div class="chat-message-emote" bind:this={root_element} onmouseenter={show_popup} onmouseleave={hide_popup}>
   {@render emote_snippet(emote.url_1x, emote.url_2x, emote.url_3x, emote.url_4x, emote.name, max_width)}
   {#each zw_emotes as zw_emote (zw_emote.name)}
     {@render emote_snippet(zw_emote.url_1x, zw_emote.url_2x, zw_emote.url_3x, zw_emote.url_4x, zw_emote.name, max_width)}
   {/each}
 </div>
-<div class="popup" {@attach popup_attachment}>
+<div class="popup" bind:this={popup_element}>
   {@render emote_popup_snippet(emote.url_4x, emote.name, max_width, emote.set_name, emote.owner)}
   <div class="popup-zw">
     {#each zw_emotes as zw_emote (zw_emote.name)}

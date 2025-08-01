@@ -653,8 +653,12 @@ export class DO extends DurableObject<Env> {
   }
 
   private async twitch_get_user_name(twitch_token: TwitchUserToken, session: string): Promise<string> {
+    console.log("Fetching Twitch user name")
     const cache_expires = await this.ctx.storage.get<number>(`twitch_user_cache_expires_${session}`)
-    if (cache_expires !== undefined && cache_expires < Date.now() / 1000) {
+    console.log("Cache expires", cache_expires)
+    const now = Date.now() / 1000
+    if (cache_expires !== undefined && cache_expires < now) {
+      console.log("Cache expired")
       await this.ctx.storage.delete(`twitch_user_name_${session}`)
       await this.ctx.storage.delete(`twitch_user_color_${session}`)
     }
@@ -675,7 +679,9 @@ export class DO extends DurableObject<Env> {
       display_name = json.data[0].display_name
       user_id = json.data[0].id
       await this.ctx.storage.put(`twitch_user_name_${session}`, display_name)
-      await this.ctx.storage.put(`twitch_user_cache_expires_${session}`, Date.now() / 1000 + 3600)
+      console.log("Stored Twitch user name", display_name)
+      await this.ctx.storage.put(`twitch_user_cache_expires_${session}`, now + 3600)
+      console.log("Stored Twitch user cache expires", now + 3600)
     }
     let name_color = await this.ctx.storage.get<string>(`twitch_user_color_${display_name}`)
     if (name_color === undefined) {
@@ -691,6 +697,7 @@ export class DO extends DurableObject<Env> {
       }
       const color_json = await response.json<TwitchUserColorServer>()
       name_color = color_json.data[0].color
+      console.log("Stored Twitch user color", name_color)
       await this.ctx.storage.put(`twitch_user_color_${display_name}`, name_color)
     }
     return display_name
