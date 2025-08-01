@@ -328,7 +328,7 @@
     display: flex;
     flex-direction: column;
     width: 20%;
-    min-width: 20rem;
+    min-width: 12rem;
     background-color: #222;
     color: #eee;
   }
