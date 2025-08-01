@@ -184,6 +184,7 @@
 
   async function handle_chat_keydown(e: KeyboardEvent) {
     if (e.key === "Enter") {
+      if (chat_input.trim() === "") return
       console.log("chat input", chat_input)
       await send_chat_message({ type: "send_message", message: chat_input })
       chat_input = ""

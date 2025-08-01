@@ -362,6 +362,10 @@ export class DO extends DurableObject<Env> {
       ws.send(JSON.stringify({ type: "error", message: "You are currently timed out" }))
       return
     }
+    if (msg.message.trim() === "") {
+      ws.send(JSON.stringify({ type: "error", message: "Message cannot be empty" }))
+      return
+    }
     const last_message_time = await this.ctx.storage.get<number>(`last_message_time_${session.name}`)
     const now = Date.now()
     if (last_message_time !== undefined && now - last_message_time < 3000) {
