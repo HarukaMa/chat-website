@@ -95,7 +95,7 @@
 
   let is_mentioned = $state(false)
 
-  if (message.indexOf(logged_in_user || "") !== -1) {
+  if (logged_in_user && message.indexOf(logged_in_user) !== -1) {
     is_mentioned = true
   }
 
