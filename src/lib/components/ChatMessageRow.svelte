@@ -89,7 +89,7 @@
 <style>
   .chat-message {
     line-break: normal;
-    overflow-wrap: normal;
+    overflow-wrap: anywhere;
   }
 
   .chat-delete {
