@@ -75,6 +75,7 @@
     position: relative;
     margin: 0 0.25rem;
     height: 32px;
+    top: 6px;
 
     &:nth-child(3) {
       margin-left: 0;
