@@ -473,7 +473,7 @@
             {#if typeof message === "string"}
               <em style="color: #aaa">{message}</em>
             {:else}
-              <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} {is_admin} {delete_message} />
+              <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} {is_admin} {delete_message} logged_in_user={name} />
             {/if}
           </div>
         {/each}

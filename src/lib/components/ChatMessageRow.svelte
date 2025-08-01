@@ -12,6 +12,7 @@
     seventv_emotes: SevenTVEmotes | null
     is_admin: boolean
     delete_message: (id: number) => Promise<void>
+    logged_in_user: string | null
   }
 
   enum EmoteType {
@@ -19,7 +20,18 @@
     ZERO_WIDTH,
   }
 
-  let { id, name, name_color, message, timestamp_ms, twitch_emotes, seventv_emotes, is_admin, delete_message }: ChatMessageProps = $props()
+  let {
+    id,
+    name,
+    name_color,
+    message,
+    timestamp_ms,
+    twitch_emotes,
+    seventv_emotes,
+    is_admin,
+    delete_message,
+    logged_in_user,
+  }: ChatMessageProps = $props()
 
   function format_timestamp(timestamp_ms: number) {
     const date = new Date(timestamp_ms)
@@ -81,6 +93,12 @@
     message_parts.push(current_segment.join(" "))
   }
 
+  let is_mentioned = $state(false)
+
+  if (message.indexOf(logged_in_user || "") !== -1) {
+    is_mentioned = true
+  }
+
   async function delete_this_message() {
     await delete_message(id)
   }
@@ -92,12 +110,16 @@
     overflow-wrap: anywhere;
   }
 
+  .chat-mentioned {
+    background-color: #573;
+  }
+
   .chat-delete {
     cursor: pointer;
   }
 </style>
 
-<div class="chat-message">
+<div class="chat-message" class:chat-mentioned={is_mentioned}>
   {#if is_admin}
     <span class="chat-delete" style="color: #aaa; font-size: 12px" onclick={delete_this_message}>⨯</span>
   {/if}
