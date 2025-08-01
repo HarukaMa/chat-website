@@ -368,8 +368,8 @@ export class DO extends DurableObject<Env> {
     }
     const last_message_time = await this.ctx.storage.get<number>(`last_message_time_${session.name}`)
     const now = Date.now()
-    if (last_message_time !== undefined && now - last_message_time < 3000) {
-      ws.send(JSON.stringify({ type: "error", message: "You can only send one message every 3 seconds" }))
+    if (this.admins.indexOf(session.name) === -1 && last_message_time !== undefined && now - last_message_time < 1000) {
+      ws.send(JSON.stringify({ type: "error", message: "You can only send one message per second" }))
       return
     }
     if (msg.message.length > 500) {
