@@ -1,5 +1,5 @@
 import type { PageServerLoad } from "./$types"
-import type { SevenTVEmoteSets, TwitchEmotes } from "../worker"
+import type { SevenTVEmotes, TwitchEmotes } from "../worker"
 
 export const load: PageServerLoad = async ({ platform, cookies }) => {
   const session = cookies.get("swarm_fm_player_session")
@@ -7,7 +7,7 @@ export const load: PageServerLoad = async ({ platform, cookies }) => {
   let name: string | null = null
   let name_color: string | null = null
   let twitch_emotes: TwitchEmotes | null = null
-  let seventv_emotes: SevenTVEmoteSets | null = null
+  let seventv_emotes: SevenTVEmotes | null = null
   let admins: string[] = []
 
   if (session && platform) {

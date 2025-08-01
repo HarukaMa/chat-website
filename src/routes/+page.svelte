@@ -206,6 +206,10 @@
       chat_messages_container.scrollTop = chat_messages_container.scrollHeight
     }
   }
+
+  function force_scroll_to_bottom() {
+    chat_messages_container.scrollTop = chat_messages_container.scrollHeight
+  }
 </script>
 
 <style lang="scss">
@@ -309,6 +313,7 @@
   }
 
   #chat-messages {
+    position: relative;
     flex: 1 1 auto;
     overflow-y: scroll;
     padding: 0.5rem;
@@ -361,6 +366,19 @@
     font-size: 12px;
     margin-right: 0.25rem;
     margin-bottom: 0.25rem;
+  }
+
+  #scroll-to-bottom {
+    position: sticky;
+    cursor: pointer;
+    color: #333;
+    font-size: 14px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0.25rem 0;
+    text-align: center;
+    background-color: #ffffffc0;
   }
 </style>
 
@@ -417,6 +435,9 @@
             {/if}
           </div>
         {/each}
+        {#if !chat_should_scroll_to_bottom}
+          <div id="scroll-to-bottom" onclick={force_scroll_to_bottom}>More messages below</div>
+        {/if}
       </div>
       <div id="chat-input">
         <div id="chat-input-area">
