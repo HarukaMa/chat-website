@@ -1,5 +1,8 @@
 <script lang="ts">
   import type { SevenTVEmotes, TwitchEmotes } from "../../worker"
+  import { computePosition, flip, shift, offset } from "@floating-ui/dom"
+  import type { Action } from "svelte/action"
+  import type { Attachment } from "svelte/attachments"
 
   type ChatMessageEmoteProps = {
     name: string
@@ -9,6 +12,8 @@
   }
 
   let { name, twitch_emotes, seventv_emotes, zero_widths }: ChatMessageEmoteProps = $props()
+
+  let root_element: HTMLDivElement
 
   function get_emote_data(name: string): {
     url_1x: string
@@ -46,6 +51,22 @@
     return { name: zw, ...get_emote_data(zw) }
   })
   const max_width = Math.max(emote.width, ...zw_emotes.map((zw) => zw.width))
+
+  const popup_attachment: Attachment = (node) => {
+    console.log(node, root_element)
+    computePosition(root_element, node as HTMLElement, {
+      strategy: "absolute",
+      placement: "bottom",
+      middleware: [flip(), shift(), offset(4)],
+    }).then(({ x, y }) => {
+      console.log(x, y)
+      Object.assign((node as HTMLElement).style, {
+        left: `${x}px`,
+        top: `${y}px`,
+        display: "none",
+      })
+    })
+  }
 </script>
 
 <style lang="scss">
@@ -62,6 +83,10 @@
     &:last-child {
       margin-right: 0;
     }
+
+    &:hover + .popup {
+      display: flex !important;
+    }
   }
 
   .emote {
@@ -75,15 +100,67 @@
       transform: translate(-50%, -50%);
     }
   }
+
+  .popup {
+    background-color: #000000c0;
+    flex-direction: column;
+    align-items: center;
+    position: absolute;
+    padding: 0.5rem;
+    width: max-content;
+    z-index: 1000;
+    font-size: 14px;
+    top: 0;
+    left: 0;
+  }
+
+  .popup-emote-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .popup-emote {
+    object-fit: contain;
+    height: 128px;
+  }
+
+  .popup-zw {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .popup-emote-name {
+    margin-top: 0.25rem;
+  }
 </style>
 
 {#snippet emote_snippet(url_1x: string, url_2x: string, url_3x: string, url_4x: string, name: string, width: number)}
   <img class="emote" src={url_1x} srcset="{url_1x} 1x, {url_2x} 2x, {url_3x} 3x, {url_4x} 4x" alt={name} style="width: {width}px" />
 {/snippet}
 
-<div class="chat-message-emote">
+{#snippet emote_popup_snippet(url_4x: string, name: string, width: number, set_name: string, owner: string)}
+  <div class="popup-emote-section">
+    <img class="popup-emote" src={url_4x} alt={name} style="width: {width * 4}px" />
+    <div class="popup-emote-name">{name}</div>
+    <div class="popup-emote-set-name">{set_name}</div>
+    {#if owner !== ""}
+      <div class="popup-emote-owner">By: {owner}</div>
+    {/if}
+  </div>
+{/snippet}
+
+<div class="chat-message-emote" bind:this={root_element}>
   {@render emote_snippet(emote.url_1x, emote.url_2x, emote.url_3x, emote.url_4x, emote.name, max_width)}
   {#each zw_emotes as zw_emote (zw_emote.name)}
     {@render emote_snippet(zw_emote.url_1x, zw_emote.url_2x, zw_emote.url_3x, zw_emote.url_4x, zw_emote.name, max_width)}
   {/each}
+</div>
+<div class="popup" {@attach popup_attachment}>
+  {@render emote_popup_snippet(emote.url_4x, emote.name, max_width, emote.set_name, emote.owner)}
+  <div class="popup-zw">
+    {#each zw_emotes as zw_emote (zw_emote.name)}
+      {@render emote_popup_snippet(zw_emote.url_4x, zw_emote.name, max_width, zw_emote.set_name, zw_emote.owner)}
+    {/each}
+  </div>
 </div>

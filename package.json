@@ -45,6 +45,6 @@
 	},
 	"dependencies": {
 		"@eyevinn/webrtc-player": "0.13.0",
-		"tippy.js": "^6.3.7"
+		"@floating-ui/dom": "^1.7.3"
 	}
 }
