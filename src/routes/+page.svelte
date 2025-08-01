@@ -91,19 +91,16 @@
   let chat_messages: (ChatMessage | string)[] = $state([])
   let chat_messages_container: HTMLDivElement
 
-  let chat_reconnection_timeout = 0
+  let chat_reconnection_timeout = $state(0)
 
   async function reconnect_chat() {
-    if (chat_reconnecting) {
-      return
-    }
     if (chat_reconnection_timeout === 0) {
       chat_reconnecting = true
       chat_reconnection_timeout = 5
-      return setTimeout(reconnect_chat, 1000)
+      setTimeout(reconnect_chat, 1000)
     } else if (chat_reconnection_timeout !== 1) {
       chat_reconnection_timeout--
-      return setTimeout(reconnect_chat, 1000)
+      setTimeout(reconnect_chat, 1000)
     } else {
       chat_reconnection_timeout = 0
       chat_reconnecting = false
@@ -228,6 +225,10 @@
 
   function force_scroll_to_bottom() {
     chat_messages_container.scrollTop = chat_messages_container.scrollHeight
+  }
+
+  function disconnect() {
+    chat_ws.close()
   }
 </script>
 
@@ -441,7 +442,7 @@
           Disconnected
         {/if}
         {#if chat_reconnecting}
-          (Auto-reconnect in {chat_reconnection_timeout}s)
+          &nbsp;(Auto-reconnect in {chat_reconnection_timeout}s)
         {/if}
       </div>
       <div id="chat-messages" bind:this={chat_messages_container} onscroll={on_chat_scroll}>
