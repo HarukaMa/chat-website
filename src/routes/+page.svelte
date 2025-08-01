@@ -25,7 +25,7 @@
   let rtc_channel_received_bytes = $state(0)
 
   let chat_connected = $state(false)
-  let chat_can_reconnect = $state(false)
+  let chat_reconnecting = $state(false)
   let chat_authenticated = $state(false)
 
   let chat_should_scroll_to_bottom = $state(true)
@@ -91,11 +91,30 @@
   let chat_messages: (ChatMessage | string)[] = $state([])
   let chat_messages_container: HTMLDivElement
 
+  let chat_reconnection_timeout = 0
+
+  async function reconnect_chat() {
+    if (chat_reconnecting) {
+      return
+    }
+    if (chat_reconnection_timeout === 0) {
+      chat_reconnecting = true
+      chat_reconnection_timeout = 5
+      return setTimeout(reconnect_chat, 1000)
+    } else if (chat_reconnection_timeout !== 1) {
+      chat_reconnection_timeout--
+      return setTimeout(reconnect_chat, 1000)
+    } else {
+      chat_reconnection_timeout = 0
+      chat_reconnecting = false
+      await connect_chat()
+    }
+  }
+
   async function connect_chat() {
     if (chat_ws && chat_connected) {
       chat_ws.close()
     }
-    chat_can_reconnect = false
     chat_ws = new WebSocket(`wss://player.sw.arm.fm/chat`)
     chat_ws.onopen = async () => {
       chat_connected = true
@@ -109,13 +128,13 @@
       console.log("chat disconnected")
       chat_messages.push("disconnected from chat server")
       chat_connected = false
-      chat_can_reconnect = true
+      reconnect_chat()
     }
     chat_ws.onerror = (e) => {
       console.log("chat error", e)
       chat_messages.push(`disconnected from chat server with error: ${e}`)
       chat_connected = false
-      chat_can_reconnect = true
+      reconnect_chat()
     }
     chat_ws.onmessage = (e) => {
       console.log("chat message", e)
@@ -198,7 +217,7 @@
 
   function on_chat_scroll() {
     chat_should_scroll_to_bottom =
-      chat_messages_container.scrollTop + chat_messages_container.clientHeight === chat_messages_container.scrollHeight
+      chat_messages_container.scrollTop + chat_messages_container.clientHeight > chat_messages_container.scrollHeight - 1
   }
 
   const scroll_to_bottom: Action = (_node) => {
@@ -421,8 +440,8 @@
         {:else}
           Disconnected
         {/if}
-        {#if chat_can_reconnect}
-          <button onclick={connect_chat}>Reconnect</button>
+        {#if chat_reconnecting}
+          (Auto-reconnect in {chat_reconnection_timeout}s)
         {/if}
       </div>
       <div id="chat-messages" bind:this={chat_messages_container} onscroll={on_chat_scroll}>
