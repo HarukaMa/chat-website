@@ -84,7 +84,8 @@
   //   })
   // }
 
-  let chat_input = $state("")
+  let chat_input_element: HTMLSpanElement | undefined = $state(undefined)
+  let chat_input_length = $state(0)
 
   let chat_ws: WebSocket | undefined
 
@@ -184,18 +185,28 @@
 
   async function handle_chat_keydown(e: KeyboardEvent) {
     if (e.key === "Enter") {
-      if (chat_input.trim() === "") return
-      console.log("chat input", chat_input)
-      await send_chat_message({ type: "send_message", message: chat_input })
-      chat_input = ""
+      e.preventDefault()
+      if (chat_input_element.innerText.trim() === "") return
+      console.log("chat input", chat_input_element.innerText)
+      await send_chat_message({ type: "send_message", message: chat_input_element.innerText })
+      chat_input_element.innerText = ""
     }
   }
 
   async function handle_chat_input() {
-    if (chat_input.length > 500) {
-      chat_input = chat_input.slice(0, 500)
-      const input = document.getElementById("chat-input-field") as HTMLInputElement
-      input.value = chat_input
+    if (chat_input_element.innerText.length > 500) {
+      chat_input_element.innerText = chat_input_element.innerText.slice(0, 500)
+      const range = document.createRange()
+      range.setStart(chat_input_element, 1)
+      range.collapse(true)
+      const selection = window.getSelection()
+      selection.removeAllRanges()
+      selection.addRange(range)
+      chat_input_element.focus()
+    }
+    chat_input_length = chat_input_element.innerText.length
+    if (chat_input_element.innerHTML === "<br>") {
+      chat_input_element.innerHTML = ""
     }
   }
 
@@ -343,9 +354,8 @@
   }
 
   #chat-input {
-    height: 3rem;
+    min-height: 3rem;
     width: 100%;
-    padding: 0 0.5rem;
     background-color: #333;
     display: flex;
     align-items: center;
@@ -358,25 +368,28 @@
     display: flex;
     border: 1px solid #555;
     border-radius: 4px;
-    height: 2rem;
+    min-height: 2rem;
     align-items: end;
+    margin: 0.5rem;
 
-    input {
+    span {
       flex: 1 1 auto;
       height: 100%;
+      min-height: 1.75rem;
       border: 0;
       background-color: #333;
       caret-color: #ccc;
       color: #ccc;
-      padding: 0 0.25rem;
+      padding: 0.25rem;
       font-size: 14px;
+      overflow-wrap: anywhere;
 
       &:focus {
         outline: none;
       }
     }
 
-    &:has(input:focus) {
+    &:has(span:focus) {
       border: 1px solid #aaa;
       border-radius: 4px;
     }
@@ -387,6 +400,9 @@
     font-size: 12px;
     margin-right: 0.25rem;
     margin-bottom: 0.25rem;
+    height: 100%;
+    display: flex;
+    align-items: end;
   }
 
   #scroll-to-bottom {
@@ -400,6 +416,11 @@
     padding: 0.25rem 0;
     text-align: center;
     background-color: #ffffffc0;
+  }
+
+  [contenteditable="true"]:empty:not(:focus):before {
+    content: attr(data-placeholder);
+    color: grey;
   }
 </style>
 
@@ -462,19 +483,17 @@
       </div>
       <div id="chat-input">
         <div id="chat-input-area">
-          <input
+          <span
             id="chat-input-field"
-            bind:value={chat_input}
-            type="text"
-            name="message"
-            placeholder={twitch_logged_in ? "Enter message" : "Login to chat"}
-            disabled={!twitch_logged_in || !chat_authenticated || !chat_connected}
+            bind:this={chat_input_element}
+            data-placeholder={twitch_logged_in ? "Enter message" : "Login to chat"}
+            contenteditable={twitch_logged_in && chat_authenticated && chat_connected}
             onkeydown={handle_chat_keydown}
             oninput={handle_chat_input}
-          />
+          ></span>
           <div id="chat-input-counter">
-            {#if chat_input.length >= 300}
-              {500 - chat_input.length}
+            {#if chat_input_length > 300}
+              {500 - chat_input_length}
             {/if}
           </div>
         </div>
