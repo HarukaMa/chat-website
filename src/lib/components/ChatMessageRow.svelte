@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SevenTVEmotes, TwitchEmotes } from "../../worker"
+  import copy_icon from "$lib/assets/fa-copy.svg"
   import ChatMessageEmote from "$lib/components/ChatMessageEmote.svelte"
 
   type ChatMessageProps = {
@@ -102,13 +103,22 @@
   async function delete_this_message() {
     await delete_message(id)
   }
+
+  function copy_message() {
+    navigator.clipboard.writeText(message)
+  }
 </script>
 
 <style>
   .chat-message {
+    position: relative;
     line-break: normal;
     overflow-wrap: anywhere;
     padding: 0.25rem;
+
+    &:hover .chat-message-copy {
+      display: block;
+    }
   }
 
   .chat-mentioned {
@@ -117,6 +127,20 @@
 
   .chat-delete {
     cursor: pointer;
+  }
+
+  .chat-message-copy {
+    display: none;
+    height: 16px;
+    width: 16px;
+    cursor: pointer;
+    position: absolute;
+    right: 0.25rem;
+    top: 0.25rem;
+
+    img {
+      filter: invert(1);
+    }
   }
 </style>
 
@@ -134,4 +158,7 @@
       <ChatMessageEmote name={part.emote} zero_widths={part.zero_widths} {twitch_emotes} {seventv_emotes} />
     {/if}
   {/each}
+  <div class="chat-message-copy" onclick={copy_message}>
+    <img src={copy_icon} alt="Copy message" />
+  </div>
 </div>
