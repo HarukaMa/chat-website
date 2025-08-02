@@ -4,7 +4,7 @@
   import twitch_logo from "$lib/assets/glitch_flat_black-ops.svg"
   import users_icon from "$lib/assets/fa-users.svg"
   import { onMount } from "svelte"
-  import type { ChatMessage, WSMessageType } from "../worker"
+  import type { ChatMessage, WSMessageType } from "../../worker"
   import ChatMessageRow from "$lib/components/ChatMessageRow.svelte"
   import type { Action } from "svelte/action"
   import videojs from "video.js"
@@ -13,8 +13,8 @@
 
   let { data } = $props()
   let session = $state(data.session)
-  let twitch_logged_in = $state(data.twitch_logged_in)
-  let name = $state(data.name)
+  let twitch_logged_in = true // $state(data.twitch_logged_in)
+  let name = "haruka_ff" // $state(data.name)
   let name_color = $state(data.name_color)
   let twitch_emotes = $state(data.twitch_emotes)
   let seventv_emotes = $state(data.seventv_emotes)
@@ -199,7 +199,6 @@
       if (input.trim() === "") return
       console.log("chat input", input)
       await send_chat_message({ type: "send_message", message: input })
-      // eslint-disable-next-line svelte/no-dom-manipulating
       chat_input_element.innerText = ""
     } else if (e.key === "Tab") {
       e.preventDefault()
@@ -222,7 +221,6 @@
   let emote_first_tab = true
 
   function autocomplete_emote(input: string) {
-    if (!chat_input_element) return
     if (input === "") return
     if (emote_partial === "") {
       emote_partial = input.split(" ").pop()?.toLowerCase() ?? ("" as string)
@@ -266,7 +264,6 @@
     console.log("input after cursor", input_after_cursor)
     const emote_next_candidate = emote_candidates[emote_current_index]
     console.log("emote next candidate", emote_next_candidate)
-    // eslint-disable-next-line svelte/no-dom-manipulating
     chat_input_element.innerText = input_before_cursor + emote_next_candidate + input_after_cursor
     console.log("chat input", chat_input_element.innerText)
     const range = document.createRange()
@@ -274,7 +271,6 @@
     console.log("range start", input_before_cursor.length + emote_next_candidate.length)
     range.collapse(true)
     const selection = window.getSelection()
-    if (!selection) throw new Error("No selection???")
     selection.removeAllRanges()
     selection.addRange(range)
     emote_current_index = (emote_current_index + 1) % emote_candidates.length
@@ -285,20 +281,17 @@
     if (!chat_input_element) return
     const input = chat_input_element.innerText
     if (input.length > 500) {
-      // eslint-disable-next-line svelte/no-dom-manipulating
       chat_input_element.innerText = input.slice(0, 500)
       const range = document.createRange()
       range.setStart(chat_input_element, 1)
       range.collapse(true)
       const selection = window.getSelection()
-      if (!selection) throw new Error("No selection???")
       selection.removeAllRanges()
       selection.addRange(range)
       chat_input_element.focus()
     }
     chat_input_length = input.length
     if (chat_input_element.innerHTML === "<br>") {
-      // eslint-disable-next-line svelte/no-dom-manipulating
       chat_input_element.innerHTML = ""
     }
   }
@@ -332,6 +325,10 @@
     chat_messages_container.scrollTop = chat_messages_container.scrollHeight
   }
 
+  function disconnect() {
+    chat_ws.close()
+  }
+
   let player: Player | undefined
 
   const videojs_init: Action = (node) => {
@@ -349,8 +346,9 @@
     })
     const volume = window.localStorage.getItem("player_volume") ?? "0.5"
     player.volume(parseFloat(volume))
-    player.on("volumechange", () => {
-      window.localStorage.setItem("player_volume", ((player as Player).volume() as number).toString())
+    player.on("volumechange", (e) => {
+      console.log("volumechange", e)
+      window.localStorage.setItem("player_volume", (player.volume() as number).toString())
     })
   }
 
