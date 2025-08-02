@@ -235,8 +235,15 @@
 
   function autocomplete_emote(input: string) {
     if (input === "") return
+    const current_selection = window.getSelection()!
+    const current_range = current_selection.getRangeAt(0)
+    console.log("current selection", current_selection)
+    console.log("current range", current_range)
     if (emote_partial === "") {
-      emote_partial = input.split(" ").pop()?.toLowerCase() ?? ("" as string)
+      // get the word just before the cursor
+      const input_before_cursor = input.slice(0, current_range.startOffset)
+      const words = input_before_cursor.split(" ")
+      emote_partial = words[words.length - 1].toLowerCase()
       if (emote_partial === "") return
       emote_candidates =
         seventv_emotes
@@ -254,10 +261,6 @@
     console.log("emote candidates", emote_candidates)
     if (emote_candidates.length === 0) return
     console.log("emote current index", emote_current_index)
-    const current_selection = window.getSelection() ?? new Selection()
-    const current_range = current_selection.getRangeAt(0)
-    console.log("current selection", current_selection)
-    console.log("current range", current_range)
     const input_cursor = current_range.startOffset
     let backtrack_length = emote_partial.length
     if (!emote_first_tab) {
