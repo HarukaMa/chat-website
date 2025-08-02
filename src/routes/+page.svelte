@@ -47,7 +47,9 @@
     }
   }
 
-  const twitch_login_url = `https://id.twitch.tv/oauth2/authorize?client_id=${env.PUBLIC_TWITCH_CLIENT_ID}&redirect_uri=${env.PUBLIC_SESSION_DOMAIN}/twitch_auth&response_type=code&scope=`
+  const reconstructedDomain = (!env.PUBLIC_SESSION_DOMAIN?.startsWith("http://") || !env.PUBLIC_SESSION_DOMAIN?.startsWith("https://")) ? (env.PUBLIC_SESSION_DOMAIN?.startsWith("localhost:") || env.PUBLIC_SESSION_DOMAIN?.startsWith("127.0.0.1")) ? "http://" + env.PUBLIC_SESSION_DOMAIN : "https://" + env.PUBLIC_SESSION_DOMAIN : env.PUBLIC_SESSION_DOMAIN
+
+  const twitch_login_url = `https://id.twitch.tv/oauth2/authorize?client_id=${env.PUBLIC_TWITCH_CLIENT_ID}&redirect_uri=${reconstructedDomain}/twitch_auth&response_type=code&scope=`
 
   onMount(async () => {
     await connect_chat()
