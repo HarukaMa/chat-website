@@ -166,6 +166,11 @@
     color: #4a9eff;
     text-decoration: underline;
     cursor: pointer;
+    padding: 0.25rem;
+  }
+
+  .chat-link:visited {
+    color: #a74aff;
   }
 
   .chat-link:hover {
@@ -180,13 +185,13 @@
   <span style="color: #aaa; font-size: 12px">{format_timestamp(timestamp_ms)}</span>
   <!-- no line break - can't have whitespace here -->
   <span style="color: {name_color}">{name}</span>:
-  {#each message_parts as part}
+  {#each message_parts as part, index}
     {#if typeof part === "string"}
       <span>{part}</span>
     {:else if 'emote' in part}
       <ChatMessageEmote name={part.emote} zero_widths={part.zero_widths} {twitch_emotes} {seventv_emotes} />
     {:else if 'link' in part}
-      <a href={part.link} target="_blank" rel="noopener noreferrer">{part.link}</a>
+      <a class="chat-link" href={part.link} target="_blank" rel="noopener noreferrer">{part.link}</a>
     {/if}
   {/each}
   <div class="chat-message-copy" onclick={copy_message}>
