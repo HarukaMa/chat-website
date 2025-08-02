@@ -3,12 +3,13 @@
   import { browser } from "$app/environment"
   import twitch_logo from "$lib/assets/glitch_flat_black-ops.svg"
   import users_icon from "$lib/assets/fa-users.svg"
-  import pkg from "@eyevinn/webrtc-player"
   import { onMount } from "svelte"
   import type { ChatMessage, WSMessageType } from "../worker"
   import ChatMessageRow from "$lib/components/ChatMessageRow.svelte"
   import type { Action } from "svelte/action"
-  const { WebRTCPlayer } = pkg
+  import videojs from "video.js"
+  import "video.js/dist/video-js.css"
+  import type Player from "video.js/dist/types/player"
 
   let { data } = $props()
   let session = $state(data.session)
@@ -19,11 +20,6 @@
   let seventv_emotes = $state(data.seventv_emotes)
   let admins = $state(data.admins)
   let is_admin = $derived(admins.includes(name || ""))
-
-  let stream_disconnected = $state(false)
-
-  let rtc_channel_state = $state("")
-  let rtc_channel_received_bytes = $state(0)
 
   let chat_connected = $state(false)
   let chat_reconnecting = $state(false)
@@ -51,8 +47,6 @@
   }
 
   const twitch_login_url = `https://id.twitch.tv/oauth2/authorize?client_id=${env.PUBLIC_TWITCH_CLIENT_ID}&redirect_uri=https://${env.PUBLIC_SESSION_DOMAIN}/twitch_auth&response_type=code&scope=`
-
-  let video: HTMLVideoElement
 
   onMount(async () => {
     await connect_chat()
@@ -205,6 +199,7 @@
       if (input.trim() === "") return
       console.log("chat input", input)
       await send_chat_message({ type: "send_message", message: input })
+      // eslint-disable-next-line svelte/no-dom-manipulating
       chat_input_element.innerText = ""
     } else if (e.key === "Tab") {
       e.preventDefault()
@@ -227,6 +222,7 @@
   let emote_first_tab = true
 
   function autocomplete_emote(input: string) {
+    if (!chat_input_element) return
     if (input === "") return
     if (emote_partial === "") {
       emote_partial = input.split(" ").pop()?.toLowerCase() ?? ("" as string)
@@ -270,6 +266,7 @@
     console.log("input after cursor", input_after_cursor)
     const emote_next_candidate = emote_candidates[emote_current_index]
     console.log("emote next candidate", emote_next_candidate)
+    // eslint-disable-next-line svelte/no-dom-manipulating
     chat_input_element.innerText = input_before_cursor + emote_next_candidate + input_after_cursor
     console.log("chat input", chat_input_element.innerText)
     const range = document.createRange()
@@ -277,6 +274,7 @@
     console.log("range start", input_before_cursor.length + emote_next_candidate.length)
     range.collapse(true)
     const selection = window.getSelection()
+    if (!selection) throw new Error("No selection???")
     selection.removeAllRanges()
     selection.addRange(range)
     emote_current_index = (emote_current_index + 1) % emote_candidates.length
@@ -287,17 +285,20 @@
     if (!chat_input_element) return
     const input = chat_input_element.innerText
     if (input.length > 500) {
+      // eslint-disable-next-line svelte/no-dom-manipulating
       chat_input_element.innerText = input.slice(0, 500)
       const range = document.createRange()
       range.setStart(chat_input_element, 1)
       range.collapse(true)
       const selection = window.getSelection()
+      if (!selection) throw new Error("No selection???")
       selection.removeAllRanges()
       selection.addRange(range)
       chat_input_element.focus()
     }
     chat_input_length = input.length
     if (chat_input_element.innerHTML === "<br>") {
+      // eslint-disable-next-line svelte/no-dom-manipulating
       chat_input_element.innerHTML = ""
     }
   }
@@ -331,8 +332,26 @@
     chat_messages_container.scrollTop = chat_messages_container.scrollHeight
   }
 
-  function disconnect() {
-    chat_ws.close()
+  let player: Player | undefined
+
+  const videojs_init: Action = (node) => {
+    console.log("videojs init")
+    player = videojs(node, {
+      autoplay: "any",
+      controls: true,
+      preload: "auto",
+      fill: true,
+      liveui: true,
+      liveTracker: {
+        trackingThreshold: 0,
+        liveTolerance: 5,
+      },
+    })
+    const volume = window.localStorage.getItem("player_volume") ?? "0.5"
+    player.volume(parseFloat(volume))
+    player.on("volumechange", () => {
+      window.localStorage.setItem("player_volume", ((player as Player).volume() as number).toString())
+    })
   }
 
   if (browser) {
@@ -401,12 +420,8 @@
     width: 80%;
     background-color: black;
 
-    iframe {
+    video-js {
       flex: 1 1 auto;
-      aspect-ratio: 16 / 9;
-      max-width: 100%;
-      margin: auto;
-      border: 0;
     }
   }
 
@@ -563,8 +578,12 @@
   </div>
   <div id="main">
     <div id="player">
-      <!-- svelte-ignore a11y_missing_attribute -->
-      <iframe src="https://customer-x1r232qaorg7edh8.cloudflarestream.com/3a05b1a1049e0f24ef1cd7b51733ff09/iframe"> </iframe>
+      <video-js id="live" use:videojs_init>
+        <source
+          src="https://customer-x1r232qaorg7edh8.cloudflarestream.com/3a05b1a1049e0f24ef1cd7b51733ff09/manifest/video.m3u8"
+          type="application/x-mpegURL"
+        />
+      </video-js>
       <div id="control-strip">
         control strip placeholder
         <!--{#if stream_disconnected}-->
