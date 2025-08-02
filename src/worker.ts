@@ -657,12 +657,14 @@ export class DO extends DurableObject<Env> {
     const cache_expires = await this.ctx.storage.get<number>(`twitch_user_cache_expires_${session}`)
     console.log("Cache expires", cache_expires)
     const now = Date.now() / 1000
+    console.log("Now", now)
     if (cache_expires !== undefined && cache_expires < now) {
       console.log("Cache expired")
       await this.ctx.storage.delete(`twitch_user_name_${session}`)
       await this.ctx.storage.delete(`twitch_user_color_${session}`)
     }
     let display_name = await this.ctx.storage.get<string>(`twitch_user_name_${session}`)
+    console.log("Fetched Twitch user name from cache", display_name)
     let user_id: string | undefined
     if (display_name === undefined) {
       const response = await fetch("https://api.twitch.tv/helix/users", {
@@ -684,6 +686,7 @@ export class DO extends DurableObject<Env> {
       console.log("Stored Twitch user cache expires", now + 3600)
     }
     let name_color = await this.ctx.storage.get<string>(`twitch_user_color_${display_name}`)
+    console.log("Fetched Twitch user color from cache", name_color)
     if (name_color === undefined) {
       const response = await fetch(`https://api.twitch.tv/helix/chat/color?user_id=${user_id}`, {
         headers: {
