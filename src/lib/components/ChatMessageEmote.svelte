@@ -25,13 +25,16 @@
     set_name: string
     owner: string
   } {
+    // apple fix
+    const is_safari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+    const seventv_format = is_safari ? "webp" : "avif"
     if (seventv_emotes) {
       let emote_data = seventv_emotes.get(name)
       if (emote_data !== undefined) {
-        const url_1x = emote_data.url + "/1x.avif"
-        const url_2x = emote_data.url + "/2x.avif"
-        const url_3x = emote_data.url + "/3x.avif"
-        const url_4x = emote_data.url + "/4x.avif"
+        const url_1x = emote_data.url + "/1x." + seventv_format
+        const url_2x = emote_data.url + "/2x." + seventv_format
+        const url_3x = emote_data.url + "/3x." + seventv_format
+        const url_4x = emote_data.url + "/4x." + seventv_format
         return { url_1x, url_2x, url_3x, url_4x, width: emote_data.width, set_name: emote_data.set_name, owner: emote_data.owner }
       }
     }
