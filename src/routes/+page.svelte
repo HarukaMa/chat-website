@@ -28,6 +28,7 @@
   let chat_session_count_task_id: NodeJS.Timeout | undefined
 
   let chat_should_scroll_to_bottom = $state(true)
+  const sessionDomainSubstringed = env.PUBLIC_SESSION_DOMAIN?.startsWith("http://") ? env.PUBLIC_SESSION_DOMAIN.substring(7) : env.PUBLIC_SESSION_DOMAIN?.startsWith("https://") ? env.PUBLIC_SESSION_DOMAIN.substring(8) : env.PUBLIC_SESSION_DOMAIN;
 
   if (!session && browser) {
     const cookies = document.cookie
@@ -41,12 +42,12 @@
     }
     if (!has_session) {
       const uuid = self.crypto.randomUUID()
-      document.cookie = `swarm_fm_player_session=${uuid}; domain=${env.PUBLIC_SESSION_DOMAIN}; expires=Fri, 31 Dec 9999 23:59:59 GMT; secure; samesite=lax`
+      document.cookie = `swarm_fm_player_session=${uuid}; domain=${sessionDomainSubstringed}; expires=Fri, 31 Dec 9999 23:59:59 GMT; secure; samesite=lax`
       session = uuid
     }
   }
 
-  const twitch_login_url = `https://id.twitch.tv/oauth2/authorize?client_id=${env.PUBLIC_TWITCH_CLIENT_ID}&redirect_uri=https://${env.PUBLIC_SESSION_DOMAIN}/twitch_auth&response_type=code&scope=`
+  const twitch_login_url = `https://id.twitch.tv/oauth2/authorize?client_id=${env.PUBLIC_TWITCH_CLIENT_ID}&redirect_uri=${env.PUBLIC_SESSION_DOMAIN}/twitch_auth&response_type=code&scope=`
 
   onMount(async () => {
     await connect_chat()
@@ -270,7 +271,7 @@
     chat_input_element.innerText = input_before_cursor + emote_next_candidate + input_after_cursor
     console.log("chat input", chat_input_element.innerText)
     const range = document.createRange()
-    range.setStart(chat_input_element.childNodes[0], input_before_cursor.length + emote_next_candidate.length)
+    range.setStart(chat_input_element!.childNodes[0], input_before_cursor.length + emote_next_candidate.length)
     console.log("range start", input_before_cursor.length + emote_next_candidate.length)
     range.collapse(true)
     const selection = window.getSelection()
