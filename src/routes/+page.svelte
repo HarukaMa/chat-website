@@ -13,6 +13,7 @@
   import type LiveTracker from "video.js/dist/types/live-tracker"
   import type QualityLevelList from "videojs-contrib-quality-levels/dist/types/quality-level-list"
   import type QualityLevel from "videojs-contrib-quality-levels/dist/types/quality-level"
+  import PlayerControlMenu from "$lib/components/PlayerControlMenu.svelte"
 
   let { data } = $props()
   let session = $state(data.session)
@@ -212,15 +213,12 @@
   }
 
   async function handle_chat_keydown(e: KeyboardEvent) {
-    if (!chat_input_element) return
-    const input = chat_input_element.innerText
+    const input = chat_input_element!.innerText
     if (e.key === "Enter") {
       e.preventDefault()
       if (input.trim() === "") return
-      console.log("chat input", input)
       await send_chat_message({ type: "send_message", message: input })
-
-      chat_input_element.innerText = ""
+      chat_input_element!.innerText = ""
     } else if (e.key === "Tab") {
       e.preventDefault()
       if (input.endsWith("@")) {
@@ -358,12 +356,12 @@
   let player: Player | undefined
   let player_debug_update_task_id: NodeJS.Timeout | undefined
 
-  let stream_manifest_url = "https://customer-x1r232qaorg7edh8.cloudflarestream.com/3a05b1a1049e0f24ef1cd7b51733ff09/manifest/video.m3u8"
+  let stream_manifest_url_base = "https://customer-x1r232qaorg7edh8.cloudflarestream.com/3a05b1a1049e0f24ef1cd7b51733ff09/manifest/video"
 
-  let stream_types = ["Normal", "Low L-word"]
-  let stream_type = ""
+  let stream_types = ["HLS", "Low L-word HLS"]
+  let stream_type = $state("HLS")
   let stream_qualities = ["Auto", "1080", "720", "480", "360", "240"]
-  let stream_quality = ""
+  let stream_quality = $state("Auto")
 
   let live_latency = $state(0)
   let buffer_duration = $state(0)
@@ -375,14 +373,14 @@
       clearInterval(player_debug_update_task_id)
     }
     const ls = window.localStorage
-    const ls_stream_type = ls.getItem("player_stream_type") ?? "Normal"
-    if (stream_types.indexOf(ls_stream_type) === -1) {
+    const ls_stream_type = ls.getItem("player_stream_type") ?? "HLS"
+    if (stream_types.indexOf(ls_stream_type) !== -1) {
       stream_type = ls_stream_type
     } else {
-      stream_type = "Normal"
+      stream_type = "HLS"
     }
     const ls_stream_quality = ls.getItem("player_stream_quality") ?? "Auto"
-    if (stream_qualities.indexOf(ls_stream_quality) === -1) {
+    if (stream_qualities.indexOf(ls_stream_quality) !== -1) {
       stream_quality = ls_stream_quality
     } else {
       stream_quality = "Auto"
@@ -442,16 +440,34 @@
     if (player === undefined) {
       return
     }
-    if (stream_type === "Low L-word") {
-      player.src(stream_manifest_url + "?protocol=llhls")
-    } else {
-      player.src(stream_manifest_url)
+    console.log("change stream type", stream_type)
+    window.localStorage.setItem("player_stream_type", stream_type)
+    if (stream_type === "Low L-word HLS") {
+      player.src(stream_manifest_url_base + ".m3u8?protocol=llhls")
+    } else if (stream_type === "HLS") {
+      player.src(stream_manifest_url_base + ".m3u8")
+    } else if (stream_type === "DASH") {
+      // player is broken on cf stream dash
+      player.src(stream_manifest_url_base + ".mpd")
     }
   }
 
   function change_stream_quality() {
     if (player === undefined) {
       return
+    }
+    console.log("change stream quality", stream_quality)
+    window.localStorage.setItem("player_stream_quality", stream_quality)
+    // @ts-expect-error unknown
+    let quality_levels: QualityLevelList = (player as unknown).qualityLevels()
+    for (let i = 0; i < quality_levels.levels_.length; i++) {
+      if (stream_quality === "Auto") {
+        quality_levels.levels_[i].enabled_(true)
+      } else if (quality_levels.levels_[i].height === parseInt(stream_quality)) {
+        quality_levels.levels_[i].enabled_(true)
+      } else {
+        quality_levels.levels_[i].enabled_(false)
+      }
     }
   }
 
@@ -554,9 +570,11 @@
 
   #player-control {
     display: flex;
-    flex-direction: column;
+    flex-direction: row-reverse;
     flex-wrap: wrap;
     column-gap: 0.5rem;
+    align-items: center;
+    padding-right: 1rem;
   }
 
   #chat-container {
@@ -702,7 +720,26 @@
           <div id="player-quality">Quality: {current_quality}</div>
         </div>
         <div class="flex-spacer"></div>
-        <div id="player-control" dir="rtl"></div>
+        <div id="player-control">
+          <PlayerControlMenu
+            control_name="Quality"
+            control_options={stream_qualities}
+            selected_index={stream_qualities.indexOf(stream_quality)}
+            select={(index) => {
+              stream_quality = stream_qualities[index]
+              change_stream_quality()
+            }}
+          />
+          <PlayerControlMenu
+            control_name="Type"
+            control_options={stream_types}
+            selected_index={stream_types.indexOf(stream_type)}
+            select={(index) => {
+              stream_type = stream_types[index]
+              change_stream_type()
+            }}
+          />
+        </div>
       </div>
     </div>
     <div id="chat-container">
