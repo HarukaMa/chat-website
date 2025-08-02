@@ -658,8 +658,8 @@ export class DO extends DurableObject<Env> {
     console.log("Cache expires", cache_expires)
     const now = Date.now() / 1000
     console.log("Now", now)
-    if (cache_expires !== undefined && cache_expires < now) {
-      console.log("Cache expired")
+    if (cache_expires === undefined || cache_expires < now) {
+      console.log("Cache expired or not found")
       await this.ctx.storage.delete(`twitch_user_name_${session}`)
       await this.ctx.storage.delete(`twitch_user_color_${session}`)
     }
