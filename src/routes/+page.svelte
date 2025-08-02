@@ -334,6 +334,19 @@
   function disconnect() {
     chat_ws.close()
   }
+
+  if (browser) {
+    window.onkeydown = (e) => {
+      if (e.key === "F4") {
+        const show_ms = window.localStorage.getItem("show_ms")
+        if (show_ms === null || show_ms === "false") {
+          window.localStorage.setItem("show_ms", "true")
+        } else {
+          window.localStorage.setItem("show_ms", "false")
+        }
+      }
+    }
+  }
 </script>
 
 <style lang="scss">

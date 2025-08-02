@@ -2,6 +2,7 @@
   import type { SevenTVEmotes, TwitchEmotes } from "../../worker"
   import copy_icon from "$lib/assets/fa-copy.svg"
   import ChatMessageEmote from "$lib/components/ChatMessageEmote.svelte"
+  import { browser } from "$app/environment"
 
   type ChatMessageProps = {
     id: number
@@ -35,10 +36,17 @@
   }: ChatMessageProps = $props()
 
   function format_timestamp(timestamp_ms: number) {
+    let show_ms = false
+    if (browser) {
+      show_ms = localStorage.getItem("show_ms") === "true"
+    }
     const date = new Date(timestamp_ms)
     const hours = date.getHours().toString().padStart(2, "0")
     const minutes = date.getMinutes().toString().padStart(2, "0")
     const seconds = date.getSeconds().toString().padStart(2, "0")
+    if (!show_ms) {
+      return `${hours}:${minutes}:${seconds}`
+    }
     const milliseconds = date.getMilliseconds().toString().padStart(3, "0")
     return `${hours}:${minutes}:${seconds}.${milliseconds}`
   }
