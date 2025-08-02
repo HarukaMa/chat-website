@@ -10,6 +10,9 @@
   import videojs from "video.js"
   import "video.js/dist/video-js.css"
   import type Player from "video.js/dist/types/player"
+  import type LiveTracker from "video.js/dist/types/live-tracker"
+  import type QualityLevelList from "videojs-contrib-quality-levels/dist/types/quality-level-list"
+  import type QualityLevel from "videojs-contrib-quality-levels/dist/types/quality-level"
 
   let { data } = $props()
   let session = $state(data.session)
@@ -60,8 +63,14 @@
 
   const twitch_login_url = `https://id.twitch.tv/oauth2/authorize?client_id=${env.PUBLIC_TWITCH_CLIENT_ID}&redirect_uri=${reconstructedDomain}/twitch_auth&response_type=code&scope=`
 
-  onMount(async () => {
-    await connect_chat()
+  onMount(() => {
+    connect_chat()
+
+    return () => {
+      if (chat_ws) {
+        chat_ws.close(1000, "going away")
+      }
+    }
   })
 
   // async function reload_webrtc_player() {
@@ -120,7 +129,7 @@
 
   async function connect_chat() {
     if (chat_ws && chat_connected) {
-      chat_ws.close()
+      chat_ws.close(1000, "reconnection")
     }
     chat_ws = new WebSocket(`wss://player.sw.arm.fm/chat`)
     chat_ws.onopen = async () => {
@@ -138,7 +147,7 @@
         await send_chat_message({ type: "get_connection_count" })
       }, 30000)
     }
-    chat_ws.onclose = () => {
+    chat_ws.onclose = (e: CloseEvent) => {
       console.log("chat disconnected")
       chat_messages.push("disconnected from chat server")
       chat_connected = false
@@ -146,7 +155,9 @@
         clearInterval(chat_session_count_task_id)
         chat_session_count_task_id = undefined
       }
-      reconnect_chat()
+      if (e.code !== 1000) {
+        reconnect_chat()
+      }
     }
     chat_ws.onerror = (e) => {
       console.log("chat error", e)
@@ -154,20 +165,17 @@
       chat_connected = false
     }
     chat_ws.onmessage = (e) => {
-      console.log("chat message", e)
       handle_chat_message(JSON.parse(e.data))
     }
   }
 
   async function send_chat_message(message: WSMessageType) {
     if (chat_ws) {
-      console.log("sending chat message", message)
       chat_ws.send(JSON.stringify(message))
     }
   }
 
   async function handle_chat_message(message: WSMessageType) {
-    console.log("received chat message", message)
     switch (message.type) {
       case "message_history":
         chat_messages = message.messages
@@ -179,10 +187,10 @@
         }
         break
       case "user_join":
-        console.log("user joined:", message.name)
+        // console.log("user joined:", message.name)
         break
       case "user_leave":
-        console.log("user left:", message.name)
+        // console.log("user left:", message.name)
         break
       case "user_timed_out":
         chat_messages.push(`${message.name} has been timed out for ${message.duration} seconds`)
@@ -211,7 +219,7 @@
       if (input.trim() === "") return
       console.log("chat input", input)
       await send_chat_message({ type: "send_message", message: input })
-      // eslint-disable-next-line svelte/no-dom-manipulating
+
       chat_input_element.innerText = ""
     } else if (e.key === "Tab") {
       e.preventDefault()
@@ -256,6 +264,13 @@
           .filter((emote) => emote.toLowerCase().startsWith(emote_partial))
           .toArray() ?? [],
       )
+      emote_candidates.sort((a, b) => {
+        const a_lower = a.toLowerCase()
+        const b_lower = b.toLowerCase()
+        if (a_lower === b_lower) return 0
+        if (a_lower < b_lower) return -1
+        return 1
+      })
     }
     console.log("emote partial", emote_partial)
     console.log("emote candidates", emote_candidates)
@@ -341,8 +356,38 @@
   }
 
   let player: Player | undefined
+  let player_debug_update_task_id: NodeJS.Timeout | undefined
+
+  let stream_manifest_url = "https://customer-x1r232qaorg7edh8.cloudflarestream.com/3a05b1a1049e0f24ef1cd7b51733ff09/manifest/video.m3u8"
+
+  let stream_types = ["Normal", "Low L-word"]
+  let stream_type = ""
+  let stream_qualities = ["Auto", "1080", "720", "480", "360", "240"]
+  let stream_quality = ""
+
+  let live_latency = $state(0)
+  let buffer_duration = $state(0)
+  let total_duration = $state(0)
+  let current_quality = $state(-1)
 
   const videojs_init: Action = (node) => {
+    if (player_debug_update_task_id !== undefined) {
+      clearInterval(player_debug_update_task_id)
+    }
+    const ls = window.localStorage
+    const ls_stream_type = ls.getItem("player_stream_type") ?? "Normal"
+    if (stream_types.indexOf(ls_stream_type) === -1) {
+      stream_type = ls_stream_type
+    } else {
+      stream_type = "Normal"
+    }
+    const ls_stream_quality = ls.getItem("player_stream_quality") ?? "Auto"
+    if (stream_qualities.indexOf(ls_stream_quality) === -1) {
+      stream_quality = ls_stream_quality
+    } else {
+      stream_quality = "Auto"
+    }
+
     console.log("videojs init")
     player = videojs(node, {
       autoplay: true,
@@ -355,11 +400,58 @@
         liveTolerance: 5,
       },
     })
+    change_stream_type()
+
+    // @ts-expect-error unknown
+    let quality_levels: QualityLevelList = (player as unknown).qualityLevels()
+    quality_levels.on("addqualitylevel", (e: {qualityLevel: QualityLevel}) => {
+      if (stream_quality === "Auto") {
+        e.qualityLevel.enabled_(true)
+        return
+      }
+      if (e.qualityLevel.height === parseInt(stream_quality)) {
+        e.qualityLevel.enabled_(true)
+      } else {
+        e.qualityLevel.enabled_(false)
+      }
+    })
+    quality_levels.on("change", () => {
+      current_quality = quality_levels.selectedIndex_
+    })
+
+
     const volume = window.localStorage.getItem("player_volume") ?? "0.5"
     player.volume(parseFloat(volume))
     player.on("volumechange", () => {
       window.localStorage.setItem("player_volume", ((player as Player).volume() as number).toString())
     })
+
+    setInterval(() => {
+      const live_tracker = player!.getChild("LiveTracker") as LiveTracker
+      const current_time = player!.currentTime() as number
+      const live_current_time = live_tracker.liveCurrentTime()
+      total_duration = live_current_time
+      live_latency = live_current_time - current_time
+      const buffer_end = player!.bufferedEnd()
+      buffer_duration = buffer_end - current_time
+    }, 250)
+  }
+
+  function change_stream_type() {
+    if (player === undefined) {
+      return
+    }
+    if (stream_type === "Low L-word") {
+      player.src(stream_manifest_url + "?protocol=llhls")
+    } else {
+      player.src(stream_manifest_url)
+    }
+  }
+
+  function change_stream_quality() {
+    if (player === undefined) {
+      return
+    }
   }
 
   if (browser) {
@@ -440,17 +532,31 @@
     gap: 1rem;
     bottom: 0;
     height: 3rem;
+    max-height: 3rem;
     width: 100%;
     background-color: #222;
     padding: 0.5rem;
     color: #eee;
   }
 
-  //#stats {
-  //  flex: 1 1 auto;
-  //  text-align: right;
-  //  font-family: monospace;
-  //}
+  .flex-spacer {
+    flex: 1 1 auto;
+  }
+
+  #stats {
+    font-family: monospace;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+    column-gap: 0.5rem;
+  }
+
+  #player-control {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+    column-gap: 0.5rem;
+  }
 
   #chat-container {
     display: flex;
@@ -586,18 +692,16 @@
   </div>
   <div id="main">
     <div id="player">
-      <video-js id="live" use:videojs_init>
-        <source
-          src="https://customer-x1r232qaorg7edh8.cloudflarestream.com/3a05b1a1049e0f24ef1cd7b51733ff09/manifest/video.m3u8"
-          type="application/x-mpegURL"
-        />
-      </video-js>
+      <video-js id="live" use:videojs_init></video-js>
       <div id="control-strip">
-        control strip placeholder
-        <!--{#if stream_disconnected}-->
-        <!--  <button onclick={() => reload_webrtc_player()}>Reload stream</button>-->
-        <!--{/if}-->
-        <!--<div id="stats">recv: {rtc_channel_received_bytes} state: {rtc_channel_state}</div>-->
+        <div id="stats">
+          <div id="player-latency">L-word: {live_latency.toFixed(2)}s</div>
+          <div id="player-buffer">Buffer: {buffer_duration.toFixed(2)}s</div>
+          <div id="player-duration">Time: {total_duration.toFixed(2)}s</div>
+          <div id="player-quality">Quality: {current_quality}</div>
+        </div>
+        <div class="flex-spacer"></div>
+        <div id="player-control" dir="rtl"></div>
       </div>
     </div>
     <div id="chat-container">
@@ -630,7 +734,8 @@
             {#if typeof message === "string"}
               <em style="color: #aaa">{message}</em>
             {:else}
-              <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} {is_admin} {delete_message} logged_in_user={name} />
+              <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} {is_admin} {delete_message}
+                              logged_in_user={name} />
             {/if}
           </div>
         {/each}
