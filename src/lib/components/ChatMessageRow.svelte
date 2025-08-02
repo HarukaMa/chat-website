@@ -51,7 +51,7 @@
     return `${hours}:${minutes}:${seconds}.${milliseconds}`
   }
   function is_link(text: string): boolean {
-    return text.startsWith('http://') || text.startsWith('https://')
+    return text.startsWith("http://") || text.startsWith("https://")
   }
 
   function is_emote(name: string): EmoteType | null {
@@ -73,6 +73,8 @@
     return null
   }
 
+  let is_mentioned = $state(false)
+
   const message_parts: (string | { emote: string; zero_widths: string[] } | { link: string })[] = []
 
   const words = message.split(" ")
@@ -80,7 +82,11 @@
   for (let i = 0; i < words.length; i++) {
     const word = words[i]
     const emote_type = is_emote(word)
-    
+
+    if (word.replace(/[:;.,!?]+$/, "").replace(/^@+/, "") === logged_in_user) {
+      is_mentioned = true
+    }
+
     if (is_link(word)) {
       // Handle links
       if (current_segment.length > 0) {
@@ -111,12 +117,6 @@
   }
   if (current_segment.length > 0) {
     message_parts.push(current_segment.join(" "))
-  }
-
-  let is_mentioned = $state(false)
-
-  if (logged_in_user && message.indexOf(logged_in_user) !== -1) {
-    is_mentioned = true
   }
 
   async function delete_this_message() {
@@ -161,7 +161,7 @@
       filter: invert(1);
     }
   }
-  
+
   .chat-link {
     color: #4a9eff;
     text-decoration: underline;
@@ -188,9 +188,9 @@
   {#each message_parts as part, index}
     {#if typeof part === "string"}
       <span>{part}</span>
-    {:else if 'emote' in part}
+    {:else if "emote" in part}
       <ChatMessageEmote name={part.emote} zero_widths={part.zero_widths} {twitch_emotes} {seventv_emotes} />
-    {:else if 'link' in part}
+    {:else if "link" in part}
       <a class="chat-link" href={part.link} target="_blank" rel="noopener noreferrer">{part.link}</a>
     {/if}
   {/each}

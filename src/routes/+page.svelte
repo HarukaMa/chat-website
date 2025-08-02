@@ -28,7 +28,11 @@
   let chat_session_count_task_id: NodeJS.Timeout | undefined
 
   let chat_should_scroll_to_bottom = $state(true)
-  const sessionDomainSubstringed = env.PUBLIC_SESSION_DOMAIN?.startsWith("http://") ? env.PUBLIC_SESSION_DOMAIN.substring(7) : env.PUBLIC_SESSION_DOMAIN?.startsWith("https://") ? env.PUBLIC_SESSION_DOMAIN.substring(8) : env.PUBLIC_SESSION_DOMAIN;
+  const sessionDomainSubstringed = env.PUBLIC_SESSION_DOMAIN?.startsWith("http://")
+    ? env.PUBLIC_SESSION_DOMAIN.substring(7)
+    : env.PUBLIC_SESSION_DOMAIN?.startsWith("https://")
+      ? env.PUBLIC_SESSION_DOMAIN.substring(8)
+      : env.PUBLIC_SESSION_DOMAIN
 
   if (!session && browser) {
     const cookies = document.cookie
@@ -47,7 +51,12 @@
     }
   }
 
-  const reconstructedDomain = (!env.PUBLIC_SESSION_DOMAIN?.startsWith("http://") || !env.PUBLIC_SESSION_DOMAIN?.startsWith("https://")) ? (env.PUBLIC_SESSION_DOMAIN?.startsWith("localhost:") || env.PUBLIC_SESSION_DOMAIN?.startsWith("127.0.0.1")) ? "http://" + env.PUBLIC_SESSION_DOMAIN : "https://" + env.PUBLIC_SESSION_DOMAIN : env.PUBLIC_SESSION_DOMAIN
+  const reconstructedDomain =
+    !env.PUBLIC_SESSION_DOMAIN?.startsWith("http://") || !env.PUBLIC_SESSION_DOMAIN?.startsWith("https://")
+      ? env.PUBLIC_SESSION_DOMAIN?.startsWith("localhost:") || env.PUBLIC_SESSION_DOMAIN?.startsWith("127.0.0.1")
+        ? "http://" + env.PUBLIC_SESSION_DOMAIN
+        : "https://" + env.PUBLIC_SESSION_DOMAIN
+      : env.PUBLIC_SESSION_DOMAIN
 
   const twitch_login_url = `https://id.twitch.tv/oauth2/authorize?client_id=${env.PUBLIC_TWITCH_CLIENT_ID}&redirect_uri=${reconstructedDomain}/twitch_auth&response_type=code&scope=`
 
@@ -225,7 +234,6 @@
   let emote_first_tab = true
 
   function autocomplete_emote(input: string) {
-    if (!chat_input_element) return
     if (input === "") return
     if (emote_partial === "") {
       emote_partial = input.split(" ").pop()?.toLowerCase() ?? ("" as string)
@@ -269,40 +277,34 @@
     console.log("input after cursor", input_after_cursor)
     const emote_next_candidate = emote_candidates[emote_current_index]
     console.log("emote next candidate", emote_next_candidate)
-    // eslint-disable-next-line svelte/no-dom-manipulating
-    chat_input_element.innerText = input_before_cursor + emote_next_candidate + input_after_cursor
-    console.log("chat input", chat_input_element.innerText)
+    chat_input_element!.innerText = input_before_cursor + emote_next_candidate + input_after_cursor
+    console.log("chat input", chat_input_element!.innerText)
     const range = document.createRange()
     range.setStart(chat_input_element!.childNodes[0], input_before_cursor.length + emote_next_candidate.length)
     console.log("range start", input_before_cursor.length + emote_next_candidate.length)
     range.collapse(true)
     const selection = window.getSelection()
-    if (!selection) throw new Error("No selection???")
-    selection.removeAllRanges()
-    selection.addRange(range)
+    selection!.removeAllRanges()
+    selection!.addRange(range)
     emote_current_index = (emote_current_index + 1) % emote_candidates.length
     console.log("emote next index", emote_current_index)
   }
 
   async function handle_chat_input() {
-    if (!chat_input_element) return
-    const input = chat_input_element.innerText
+    const input = chat_input_element!.innerText
     if (input.length > 500) {
-      // eslint-disable-next-line svelte/no-dom-manipulating
-      chat_input_element.innerText = input.slice(0, 500)
+      chat_input_element!.innerText = input.slice(0, 500)
       const range = document.createRange()
-      range.setStart(chat_input_element, 1)
+      range.setStart(chat_input_element!, 1)
       range.collapse(true)
       const selection = window.getSelection()
-      if (!selection) throw new Error("No selection???")
-      selection.removeAllRanges()
-      selection.addRange(range)
-      chat_input_element.focus()
+      selection!.removeAllRanges()
+      selection!.addRange(range)
+      chat_input_element!.focus()
     }
     chat_input_length = input.length
-    if (chat_input_element.innerHTML === "<br>") {
-      // eslint-disable-next-line svelte/no-dom-manipulating
-      chat_input_element.innerHTML = ""
+    if (chat_input_element!.innerHTML === "<br>") {
+      chat_input_element!.innerHTML = ""
     }
   }
 
@@ -340,7 +342,7 @@
   const videojs_init: Action = (node) => {
     console.log("videojs init")
     player = videojs(node, {
-      autoplay: "any",
+      autoplay: true,
       controls: true,
       preload: "auto",
       fill: true,
