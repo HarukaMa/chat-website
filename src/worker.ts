@@ -660,8 +660,11 @@ export class DO extends DurableObject<Env> {
     console.log("Now", now)
     if (cache_expires === undefined || cache_expires < now) {
       console.log("Cache expired or not found")
+      const cached_display_name = await this.ctx.storage.get<string>(`twitch_user_name_${session}`)
       await this.ctx.storage.delete(`twitch_user_name_${session}`)
-      await this.ctx.storage.delete(`twitch_user_color_${session}`)
+      if (cached_display_name !== undefined) {
+        await this.ctx.storage.delete(`twitch_user_color_${cached_display_name}`)
+      }
     }
     let display_name = await this.ctx.storage.get<string>(`twitch_user_name_${session}`)
     console.log("Fetched Twitch user name from cache", display_name)
