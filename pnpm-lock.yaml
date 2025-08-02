@@ -14,9 +14,6 @@ importers:
       '@floating-ui/dom':
         specifier: ^1.7.3
         version: 1.7.3
-      video.js:
-        specifier: ^8.23.3
-        version: 8.23.3
     devDependencies:
       '@eslint/compat':
         specifier: ^1.2.5
@@ -69,6 +66,9 @@ importers:
       typescript-eslint:
         specifier: ^8.20.0
         version: 8.38.0(eslint@9.32.0)(typescript@5.8.3)
+      video.js:
+        specifier: ^8.23.3
+        version: 8.23.3
       vite:
         specifier: ^7.0.4
         version: 7.0.6(@types/node@24.1.0)(sass-embedded@1.89.2)
