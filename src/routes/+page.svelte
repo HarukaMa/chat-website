@@ -560,7 +560,7 @@
     background-color: #ffffffc0;
   }
 
-  [contenteditable="true"]:empty:not(:focus):before {
+  [contenteditable="plaintext-only"]:empty:before {
     content: attr(data-placeholder);
     color: grey;
   }
