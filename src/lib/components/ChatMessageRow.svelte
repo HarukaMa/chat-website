@@ -50,6 +50,9 @@
     const milliseconds = date.getMilliseconds().toString().padStart(3, "0")
     return `${hours}:${minutes}:${seconds}.${milliseconds}`
   }
+  function is_link(text: string): boolean {
+    return text.startsWith('http://') || text.startsWith('https://')
+  }
 
   function is_emote(name: string): EmoteType | null {
     if (seventv_emotes) {
@@ -70,14 +73,22 @@
     return null
   }
 
-  const message_parts: (string | { emote: string; zero_widths: string[] })[] = []
+  const message_parts: (string | { emote: string; zero_widths: string[] } | { link: string })[] = []
 
   const words = message.split(" ")
   const current_segment = []
   for (let i = 0; i < words.length; i++) {
     const word = words[i]
     const emote_type = is_emote(word)
-    if (emote_type === null) {
+    
+    if (is_link(word)) {
+      // Handle links
+      if (current_segment.length > 0) {
+        message_parts.push(current_segment.join(" "))
+        current_segment.length = 0
+      }
+      message_parts.push({ link: word })
+    } else if (emote_type === null) {
       current_segment.push(word)
     } else {
       if (current_segment.length > 0) {
@@ -150,6 +161,16 @@
       filter: invert(1);
     }
   }
+  
+  .chat-link {
+    color: #4a9eff;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .chat-link:hover {
+    color: #6bb3ff;
+  }
 </style>
 
 <div class="chat-message" class:chat-mentioned={is_mentioned}>
@@ -162,8 +183,10 @@
   {#each message_parts as part}
     {#if typeof part === "string"}
       <span>{part}</span>
-    {:else}
+    {:else if 'emote' in part}
       <ChatMessageEmote name={part.emote} zero_widths={part.zero_widths} {twitch_emotes} {seventv_emotes} />
+    {:else if 'link' in part}
+      <a href={part.link} target="_blank" rel="noopener noreferrer">{part.link}</a>
     {/if}
   {/each}
   <div class="chat-message-copy" onclick={copy_message}>
