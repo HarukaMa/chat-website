@@ -416,6 +416,7 @@
       }
     })
     quality_levels.on("change", () => {
+      console.log("quality changed", quality_levels.levels_, quality_levels.selectedIndex_)
       current_quality = quality_levels.selectedIndex_
     })
 
