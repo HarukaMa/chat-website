@@ -185,7 +185,7 @@
   <span style="color: #aaa; font-size: 12px">{format_timestamp(timestamp_ms)}</span>
   <!-- no line break - can't have whitespace here -->
   <span style="color: {name_color}">{name}</span>:
-  {#each message_parts as part, index}
+  {#each message_parts as part}
     {#if typeof part === "string"}
       <span>{part}</span>
     {:else if "emote" in part}

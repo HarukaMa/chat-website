@@ -1,8 +1,6 @@
 <script lang="ts">
   import type { SevenTVEmotes, TwitchEmotes } from "../../worker"
   import { computePosition, flip, shift, offset } from "@floating-ui/dom"
-  import type { Action } from "svelte/action"
-  import type { Attachment } from "svelte/attachments"
 
   type ChatMessageEmoteProps = {
     name: string
@@ -104,6 +102,10 @@
     }
   }
 
+  :global(.popup + .chat-message-emote) {
+    margin-left: 0;
+  }
+
   .popup {
     background-color: #000000c0;
     display: none;
@@ -159,8 +161,7 @@
   {#each zw_emotes as zw_emote (zw_emote.name)}
     {@render emote_snippet(zw_emote.url_1x, zw_emote.url_2x, zw_emote.url_3x, zw_emote.url_4x, zw_emote.name, max_width)}
   {/each}
-</div>
-<div class="popup" bind:this={popup_element}>
+</div><div class="popup" bind:this={popup_element}>
   {@render emote_popup_snippet(emote.url_4x, emote.name, max_width, emote.set_name, emote.owner)}
   <div class="popup-zw">
     {#each zw_emotes as zw_emote (zw_emote.name)}
