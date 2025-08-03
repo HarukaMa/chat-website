@@ -42,7 +42,15 @@
         // there should be no missing urls here
         const url_2x = emote_data.images.url_2x || ""
         const url_4x = emote_data.images.url_4x || ""
-        return { url_1x: url_2x, url_2x: url_4x, url_3x: url_4x, url_4x, width: 32, set_name: "vedal987 Twitch Emotes", owner: "" }
+        return {
+          url_1x: url_2x,
+          url_2x: url_4x,
+          url_3x: url_4x,
+          url_4x,
+          width: 32,
+          set_name: `${emote_data.channel} Twitch Emotes`,
+          owner: "",
+        }
       }
     }
     return { url_1x: "", url_2x: "", url_3x: "", url_4x: "", width: 0, set_name: "", owner: "" }

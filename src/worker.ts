@@ -80,6 +80,7 @@ export type TwitchEmote = {
     url_4x: string | null
   }
   animated: boolean
+  channel: string
 }
 
 export type TwitchEmotes = Map<string, TwitchEmote>
@@ -305,6 +306,11 @@ export class DO extends DurableObject<Env> {
 
       case "ban_user": {
         await this.ws_ban_user(msg, session, ws)
+        break
+      }
+
+      case "unban_user": {
+        await this.ws_unban_user(msg, session, ws)
         break
       }
 
@@ -783,6 +789,43 @@ export class DO extends DurableObject<Env> {
     return { name, name_color }
   }
 
+  async get_twitch_emotes(twitch_token: TwitchToken, channel_id: number, channel_name: string): Promise<TwitchEmotes> {
+    const emote_data = new Map<string, TwitchEmote>()
+    const response = await fetch(`https://api.twitch.tv/helix/chat/emotes?broadcaster_id=${channel_id}`, {
+      headers: {
+        "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${twitch_token.access_token}`,
+      },
+    })
+    console.log("Fetched Twitch emotes")
+    const json = await response.json<TwitchEmotesServer>()
+    const template = json.template
+    for (const data of json.data) {
+      const id = data.id
+      let format = "static"
+      if (data.format.includes("animated")) {
+        format = "animated"
+      }
+      let theme_mode = "light"
+      if (!data.theme_mode.includes("light")) {
+        theme_mode = "dark"
+      }
+      const scale = data.scale
+      const base_url = template.replace("{{id}}", id).replace("{{format}}", format).replace("{{theme_mode}}", theme_mode)
+      const emote: TwitchEmote = {
+        animated: format === "animated",
+        images: {
+          url_1x: scale.includes("1.0") ? base_url.replace("{{scale}}", "1.0") : null,
+          url_2x: scale.includes("2.0") ? base_url.replace("{{scale}}", "2.0") : null,
+          url_4x: scale.includes("3.0") ? base_url.replace("{{scale}}", "3.0") : null,
+        },
+        channel: channel_name,
+      }
+      emote_data.set(data.name, emote)
+    }
+    return emote_data
+  }
+
   async twitch_emotes(): Promise<TwitchEmotes> {
     let twitch_token = await this.ctx.storage.get<TwitchToken>("twitch_token")
     const now = Date.now() / 1000
@@ -794,42 +837,25 @@ export class DO extends DurableObject<Env> {
     const emote_cache = await this.ctx.storage.get<TwitchEmotesCache>("twitch_emotes")
     let emote_data: TwitchEmotes = new Map()
     if (emote_cache === undefined || emote_cache.expires_at < Date.now() / 1000) {
-      const response = await fetch("https://api.twitch.tv/helix/chat/emotes?broadcaster_id=85498365", {
-        headers: {
-          "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
-          Authorization: `Bearer ${twitch_token.access_token}`,
-        },
-      })
-      console.log("Fetched Twitch emotes")
-      const json = await response.json<TwitchEmotesServer>()
-      const template = json.template
-      for (const data of json.data) {
-        const id = data.id
-        let format = "static"
-        if (data.format.includes("animated")) {
-          format = "animated"
+      const channel_list: [number, string][] = [
+        [85498365, "vedal987"],
+        [56418014, "anny"],
+        [469632185, "camila"],
+        [825937345, "Ellie_Minibot"],
+        [852880224, "cerberVT"],
+        [1004060561, "MinikoMew"],
+      ]
+      for (const [channel_id, channel_name] of channel_list) {
+        const channel_emotes = await this.get_twitch_emotes(twitch_token, channel_id, channel_name)
+        for (const [name, emote] of channel_emotes) {
+          emote_data.set(name, emote)
         }
-        let theme_mode = "light"
-        if (!data.theme_mode.includes("light")) {
-          theme_mode = "dark"
-        }
-        const scale = data.scale
-        const base_url = template.replace("{{id}}", id).replace("{{format}}", format).replace("{{theme_mode}}", theme_mode)
-        const emote: TwitchEmote = {
-          animated: format === "animated",
-          images: {
-            url_1x: scale.includes("1.0") ? base_url.replace("{{scale}}", "1.0") : null,
-            url_2x: scale.includes("2.0") ? base_url.replace("{{scale}}", "2.0") : null,
-            url_4x: scale.includes("3.0") ? base_url.replace("{{scale}}", "3.0") : null,
-          },
-        }
-        emote_data.set(data.name, emote)
-        const emote_cache: TwitchEmotesCache = {
-          data: emote_data,
-          expires_at: Date.now() / 1000 + 86400,
-        }
-        await this.ctx.storage.put("twitch_emotes", emote_cache)
       }
+      const emote_cache: TwitchEmotesCache = {
+        data: emote_data,
+        expires_at: Date.now() / 1000 + 86400,
+      }
+      await this.ctx.storage.put("twitch_emotes", emote_cache)
     } else {
       emote_data = emote_cache.data
     }
