@@ -162,10 +162,10 @@
     {@render emote_snippet(zw_emote.url_1x, zw_emote.url_2x, zw_emote.url_3x, zw_emote.url_4x, zw_emote.name, max_width)}
   {/each}
 </div><div class="popup" bind:this={popup_element}>
-  {@render emote_popup_snippet(emote.url_4x, emote.name, max_width, emote.set_name, emote.owner)}
+  {@render emote_popup_snippet(emote.url_4x, emote.name, emote.width, emote.set_name, emote.owner)}
   <div class="popup-zw">
     {#each zw_emotes as zw_emote (zw_emote.name)}
-      {@render emote_popup_snippet(zw_emote.url_4x, zw_emote.name, max_width, zw_emote.set_name, zw_emote.owner)}
+      {@render emote_popup_snippet(zw_emote.url_4x, zw_emote.name, zw_emote.width, zw_emote.set_name, zw_emote.owner)}
     {/each}
   </div>
 </div>
