@@ -360,7 +360,7 @@
 
   let stream_types = ["HLS", "Low L-word HLS"]
   let stream_type = $state("HLS")
-  let stream_qualities = ["Auto", "1080", "720", "480", "360", "240"]
+  let stream_qualities = ["Auto", "1080", "720", "480", "360", "240", "Audio only"]
   let stream_quality = $state("Auto")
 
   let live_latency = $state(0)
@@ -403,7 +403,7 @@
     // @ts-expect-error unknown
     let quality_levels: QualityLevelList = (player as unknown).qualityLevels()
     quality_levels.on("addqualitylevel", (e: {qualityLevel: QualityLevel}) => {
-      if (stream_quality === "Auto") {
+      if (stream_quality === "Auto" || stream_quality === "Audio only") {
         e.qualityLevel.enabled_(true)
         return
       }
@@ -430,25 +430,42 @@
       const current_time = player!.currentTime() as number
       const live_current_time = live_tracker.liveCurrentTime()
       total_duration = live_current_time
-      live_latency = live_current_time - current_time
+      const latency_offset = stream_type === "Low L-word HLS" ? 0 : 10
+      live_latency = live_current_time - current_time + latency_offset
       const buffer_end = player!.bufferedEnd()
       buffer_duration = buffer_end - current_time
     }, 250)
   }
 
-  function change_stream_type() {
+  async function change_stream_type() {
     if (player === undefined) {
       return
     }
     console.log("change stream type", stream_type)
     window.localStorage.setItem("player_stream_type", stream_type)
+    let source: string
     if (stream_type === "Low L-word HLS") {
-      player.src(stream_manifest_url_base + ".m3u8?protocol=llhls")
+      const manifest_link = stream_manifest_url_base + ".m3u8?protocol=llhls"
+      if (stream_quality === "Audio only") {
+        source = await fetch_audio_manifest(manifest_link) ?? manifest_link
+      } else {
+        source = manifest_link
+      }
     } else if (stream_type === "HLS") {
-      player.src(stream_manifest_url_base + ".m3u8")
+      const manifest_link = stream_manifest_url_base + ".m3u8"
+      if (stream_quality === "Audio only") {
+        source = await fetch_audio_manifest(manifest_link) ?? manifest_link
+      } else {
+        source = manifest_link
+      }
     } else if (stream_type === "DASH") {
       // player is broken on cf stream dash
-      player.src(stream_manifest_url_base + ".mpd")
+      source = stream_manifest_url_base + ".mpd"
+    } else {
+      return
+    }
+    if (player.src(undefined) !== source) {
+      player.src(source)
     }
   }
 
@@ -457,9 +474,16 @@
       return
     }
     console.log("change stream quality", stream_quality)
-    window.localStorage.setItem("player_stream_quality", stream_quality)
     // @ts-expect-error unknown
     let quality_levels: QualityLevelList = (player as unknown).qualityLevels()
+    window.localStorage.setItem("player_stream_quality", stream_quality)
+    change_stream_type()
+    if (stream_quality === "Audio only") {
+      quality_levels.levels_.forEach((level) => {
+        level.enabled_(true)
+      })
+      return
+    }
     for (let i = 0; i < quality_levels.levels_.length; i++) {
       if (stream_quality === "Auto") {
         quality_levels.levels_[i].enabled_(true)
@@ -467,6 +491,22 @@
         quality_levels.levels_[i].enabled_(true)
       } else {
         quality_levels.levels_[i].enabled_(false)
+      }
+    }
+  }
+
+  async function fetch_audio_manifest(main_manifest_link: string): Promise<string | undefined> {
+    const response = await fetch(main_manifest_link)
+    const manifest = await response.text()
+    for (const line of manifest.split("\n")) {
+      if (line.startsWith("#EXT-X-MEDIA:")) {
+        const url = line.match(/URI="([^"]+)"/)?.[1]
+        if (url !== undefined) {
+          let manifest_path = main_manifest_link.split("/").slice(0, -1).join("/")
+          console.log(manifest_path + "/" + url)
+
+          return manifest_path + "/" + url
+        }
       }
     }
   }
