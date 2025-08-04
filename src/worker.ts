@@ -1021,10 +1021,10 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
     output += "Session count: " + session_count + "\n"
     for (let i = 0; i < ws_connections.length; i++) {
       const ws = ws_connections[i]
-      output += `${i}: ${JSON.stringify(sessions.get(ws))}\n`
+      output += `${i}: ${JSON.stringify(ws)}\n`
       const session = sessions.get(ws)
       if (session) {
-        output += `  ${i}: ${JSON.stringify(session)}\n`
+        output += `  auth: ${session.authenticated} name: ${session.name} hist: ${session.history_requested}\n`
         sessions.delete(ws)
       }
     }
