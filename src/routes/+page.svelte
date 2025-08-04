@@ -2,7 +2,6 @@
   import { env } from "$env/dynamic/public"
   import { browser } from "$app/environment"
   import twitch_logo from "$lib/assets/glitch_flat_black-ops.svg"
-  import users_icon from "$lib/assets/fa-users.svg"
   import { onMount } from "svelte"
   import type { ChatMessage, WSMessageType } from "../worker"
   import ChatMessageRow from "$lib/components/ChatMessageRow.svelte"
@@ -14,6 +13,7 @@
   import type QualityLevelList from "videojs-contrib-quality-levels/dist/types/quality-level-list"
   import type QualityLevel from "videojs-contrib-quality-levels/dist/types/quality-level"
   import PlayerControlMenu from "$lib/components/PlayerControlMenu.svelte"
+  import ChatConnectionCount from "$lib/components/ChatConnectionCount.svelte"
 
   let { data } = $props()
   let session = $state(data.session)
@@ -28,7 +28,7 @@
   let chat_connected = $state(false)
   let chat_reconnecting = $state(false)
   let chat_authenticated = $state(false)
-  let chat_session_count = $state(0)
+  let chat_session_counts = $state({ session: 0, logged_in: 0, unique_logged_in: 0 })
   let chat_session_count_task_id: NodeJS.Timeout | undefined
 
   let chat_should_scroll_to_bottom = $state(true)
@@ -199,8 +199,8 @@
       case "user_banned":
         chat_messages.push(`${message.name} has been banned`)
         break
-      case "connection_count":
-        chat_session_count = message.count
+      case "connection_counts":
+        chat_session_counts = message.data
         break
       case "error":
         console.log("chat error:", message.message)
@@ -402,7 +402,7 @@
 
     // @ts-expect-error unknown
     let quality_levels: QualityLevelList = (player as unknown).qualityLevels()
-    quality_levels.on("addqualitylevel", (e: {qualityLevel: QualityLevel}) => {
+    quality_levels.on("addqualitylevel", (e: { qualityLevel: QualityLevel }) => {
       if (stream_quality === "Auto" || stream_quality === "Audio only") {
         e.qualityLevel.enabled_(true)
         return
@@ -417,7 +417,6 @@
       console.log("quality changed", quality_levels.levels_, quality_levels.selectedIndex_)
       current_quality = quality_levels.selectedIndex_
     })
-
 
     const volume = window.localStorage.getItem("player_volume") ?? "0.5"
     player.volume(parseFloat(volume))
@@ -447,14 +446,14 @@
     if (stream_type === "Low L-word HLS") {
       const manifest_link = stream_manifest_url_base + ".m3u8?protocol=llhls"
       if (stream_quality === "Audio only") {
-        source = await fetch_audio_manifest(manifest_link) ?? manifest_link
+        source = (await fetch_audio_manifest(manifest_link)) ?? manifest_link
       } else {
         source = manifest_link
       }
     } else if (stream_type === "HLS") {
       const manifest_link = stream_manifest_url_base + ".m3u8"
       if (stream_quality === "Audio only") {
-        source = await fetch_audio_manifest(manifest_link) ?? manifest_link
+        source = (await fetch_audio_manifest(manifest_link)) ?? manifest_link
       } else {
         source = manifest_link
       }
@@ -642,18 +641,6 @@
     flex: 1 1 auto;
   }
 
-  #chat-session-count {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-
-    img {
-      filter: invert(1);
-      height: 1rem;
-      width: 1rem;
-    }
-  }
-
   #chat-messages {
     position: relative;
     flex: 1 1 auto;
@@ -799,11 +786,8 @@
             &nbsp;(Auto-reconnect in {chat_reconnection_timeout}s)
           {/if}
         </span>
-        {#if chat_session_count > 0}
-          <div id="chat-session-count">
-            <img src={users_icon} alt="Chat users" />
-            {chat_session_count}
-          </div>
+        {#if chat_session_counts.session >= 0}
+          <ChatConnectionCount {chat_session_counts} />
         {/if}
       </div>
       <div id="chat-messages" bind:this={chat_messages_container} onscroll={on_chat_scroll}>
@@ -812,8 +796,7 @@
             {#if typeof message === "string"}
               <em style="color: #aaa">{message}</em>
             {:else}
-              <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} {is_admin} {delete_message}
-                              logged_in_user={name} />
+              <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} {is_admin} {delete_message} logged_in_user={name} />
             {/if}
           </div>
         {/each}

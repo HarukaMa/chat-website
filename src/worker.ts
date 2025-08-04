@@ -22,6 +22,7 @@ export type WSMessageType =
   | { type: "user_join"; name: string }
   | { type: "user_leave"; name: string }
   | { type: "connection_count"; count: number }
+  | { type: "connection_counts"; data: { session: number; logged_in: number; unique_logged_in: number } }
   // client -> server
   | { type: "authenticate"; session: string }
   | { type: "send_message"; message: string }
@@ -32,6 +33,7 @@ export type WSMessageType =
   | { type: "user_list"; users?: string[] }
   | { type: "history_request" }
   | { type: "get_connection_count" }
+  | { type: "get_connection_counts" }
   // error
   | { type: "error"; message: string }
 
@@ -234,7 +236,7 @@ export class DO extends DurableObject<Env> {
     this.ctx.storage.sql.exec(`CREATE INDEX idx_timestamp ON messages (timestamp_ms DESC)`)
   }
 
-  broadcast(message: WSMessageType) {
+  private broadcast(message: WSMessageType) {
     this.ctx.getWebSockets().forEach((ws) => {
       ws.send(JSON.stringify(message))
     })
@@ -318,6 +320,10 @@ export class DO extends DurableObject<Env> {
         ws.send(JSON.stringify({ type: "connection_count", count: this.ctx.getWebSockets().length }))
         break
 
+      case "get_connection_counts":
+        await this.ws_get_connection_counts(msg, session, ws)
+        break
+
       default:
         ws.close(1007, "invalid message type")
         return
@@ -355,7 +361,7 @@ export class DO extends DurableObject<Env> {
     this.broadcast({ type: "user_join", name: session.name })
   }
 
-  async ws_send_message(msg: WSMessageType, session: Session, ws: WebSocket) {
+  private async ws_send_message(msg: WSMessageType, session: Session, ws: WebSocket) {
     if (msg.type !== "send_message") {
       return
     }
@@ -427,7 +433,7 @@ export class DO extends DurableObject<Env> {
     })
   }
 
-  async ws_history_request(msg: WSMessageType, session: Session, ws: WebSocket) {
+  private async ws_history_request(_msg: WSMessageType, session: Session, ws: WebSocket) {
     if (session.history_requested) {
       ws.send(JSON.stringify({ type: "error", message: "History already requested" }))
       return
@@ -457,7 +463,7 @@ export class DO extends DurableObject<Env> {
     ws.send(JSON.stringify({ type: "message_history", messages: history_messages.toReversed() }))
   }
 
-  async ws_delete_message(msg: WSMessageType, session: Session, ws: WebSocket) {
+  private async ws_delete_message(msg: WSMessageType, session: Session, ws: WebSocket) {
     if (msg.type !== "delete_message") {
       return
     }
@@ -477,7 +483,7 @@ export class DO extends DurableObject<Env> {
     this.broadcast({ type: "message_deleted", id: msg.id })
   }
 
-  async ws_timeout_user(msg: WSMessageType, session: Session, ws: WebSocket) {
+  private async ws_timeout_user(msg: WSMessageType, session: Session, ws: WebSocket) {
     if (msg.type !== "timeout_user") {
       return
     }
@@ -492,7 +498,7 @@ export class DO extends DurableObject<Env> {
     await this.timeout_user(msg.name, msg.duration, ws)
   }
 
-  async command_timeout_user(msg: WSMessageType, session: Session, ws: WebSocket) {
+  private async command_timeout_user(msg: WSMessageType, session: Session, ws: WebSocket) {
     if (msg.type !== "send_message") {
       return
     }
@@ -508,7 +514,7 @@ export class DO extends DurableObject<Env> {
     await this.timeout_user(message_parts[1], parseInt(message_parts[2]), ws)
   }
 
-  async timeout_user(name: string, duration: number, ws: WebSocket) {
+  private async timeout_user(name: string, duration: number, ws: WebSocket) {
     if (this.admins.indexOf(name) !== -1) {
       ws.send(JSON.stringify({ type: "error", message: "You cannot timeout other admins" }))
       return
@@ -517,7 +523,7 @@ export class DO extends DurableObject<Env> {
     this.broadcast({ type: "user_timed_out", name, duration })
   }
 
-  async ws_ban_user(msg: WSMessageType, session: Session, ws: WebSocket) {
+  private async ws_ban_user(msg: WSMessageType, session: Session, ws: WebSocket) {
     if (msg.type !== "ban_user") {
       return
     }
@@ -532,7 +538,7 @@ export class DO extends DurableObject<Env> {
     await this.ban_user(msg.name, ws)
   }
 
-  async command_ban_user(msg: WSMessageType, session: Session, ws: WebSocket) {
+  private async command_ban_user(msg: WSMessageType, session: Session, ws: WebSocket) {
     if (msg.type !== "send_message") {
       return
     }
@@ -548,7 +554,7 @@ export class DO extends DurableObject<Env> {
     await this.ban_user(message_parts[1], ws)
   }
 
-  async ban_user(name: string, ws: WebSocket) {
+  private async ban_user(name: string, ws: WebSocket) {
     if (this.admins.indexOf(name) !== -1) {
       ws.send(JSON.stringify({ type: "error", message: "You cannot ban other admins" }))
       return
@@ -557,7 +563,7 @@ export class DO extends DurableObject<Env> {
     this.broadcast({ type: "user_banned", name })
   }
 
-  async ws_unban_user(msg: WSMessageType, session: Session, ws: WebSocket) {
+  private async ws_unban_user(msg: WSMessageType, session: Session, ws: WebSocket) {
     if (msg.type !== "unban_user") {
       return
     }
@@ -572,7 +578,7 @@ export class DO extends DurableObject<Env> {
     await this.unban_user(msg.name, ws)
   }
 
-  async command_unban_user(msg: WSMessageType, session: Session, ws: WebSocket) {
+  private async command_unban_user(msg: WSMessageType, session: Session, ws: WebSocket) {
     if (msg.type !== "send_message") {
       return
     }
@@ -588,9 +594,39 @@ export class DO extends DurableObject<Env> {
     await this.unban_user(message_parts[1], ws)
   }
 
-  async unban_user(name: string, ws: WebSocket) {
+  private async unban_user(name: string, ws: WebSocket) {
     await this.ctx.storage.delete(`ban_${name}`)
     ws.send(JSON.stringify({ type: "error", message: `User ${name} has been unbanned` }))
+  }
+
+  private async ws_get_connection_counts(msg: WSMessageType, _session: Session, ws: WebSocket) {
+    if (msg.type !== "get_connection_counts") {
+      return
+    }
+    const ws_connections = this.ctx.getWebSockets()
+    const ws_connection_count = ws_connections.length
+    let ws_logged_in_count = 0
+    const ws_logged_in_names = new Set<string>()
+    ws_connections.forEach((ws) => {
+      if (this.sessions.has(ws)) {
+        const session = this.sessions.get(ws)!
+        if (session.authenticated) {
+          ws_logged_in_count++
+          ws_logged_in_names.add(session.name)
+        }
+      }
+    })
+
+    ws.send(
+      JSON.stringify({
+        type: "connection_counts",
+        data: {
+          session: ws_connection_count,
+          logged_in: ws_logged_in_count,
+          unique_logged_in: ws_logged_in_names.size,
+        },
+      }),
+    )
   }
 
   async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
@@ -789,7 +825,7 @@ export class DO extends DurableObject<Env> {
     return { name, name_color }
   }
 
-  async get_twitch_emotes(twitch_token: TwitchToken, channel_id: number, channel_name: string): Promise<TwitchEmotes> {
+  private async get_twitch_emotes(twitch_token: TwitchToken, channel_id: number, channel_name: string): Promise<TwitchEmotes> {
     const emote_data = new Map<string, TwitchEmote>()
     const response = await fetch(`https://api.twitch.tv/helix/chat/emotes?broadcaster_id=${channel_id}`, {
       headers: {
@@ -962,6 +998,43 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
     return new Response("OK")
   }
 
+  async session_debug(request: Request): Promise<Response> {
+    const cookie_header = request.headers.get("cookie")
+    if (cookie_header) {
+      const cookies = cookie_header.split(";")
+      for (const cookie of cookies) {
+        const [key, value] = cookie.trim().split("=")
+        if (key === "swarm_fm_player_session") {
+          const session = await this.twitch_session_check(value)
+          if (!(session && this.admins.includes(session.name))) {
+            return new Response("Unauthorized", { status: 401 })
+          }
+        }
+      }
+    }
+
+    const ws_connections = this.ctx.getWebSockets()
+    const ws_connection_count = ws_connections.length
+    const sessions = new Map(this.sessions)
+    const session_count = sessions.size
+    let output = "Connection count: " + ws_connection_count + "\n"
+    output += "Session count: " + session_count + "\n"
+    for (let i = 0; i < ws_connections.length; i++) {
+      const ws = ws_connections[i]
+      output += `${i}: ${JSON.stringify(sessions.get(ws))}\n`
+      const session = sessions.get(ws)
+      if (session) {
+        output += `  ${i}: ${JSON.stringify(session)}\n`
+        sessions.delete(ws)
+      }
+    }
+    output += "\nSessions without WS connection:\n"
+    for (const session of sessions.values()) {
+      output += `${JSON.stringify(session)}\n`
+    }
+    return new Response(output)
+  }
+
   admin_list(): string[] {
     return this.admins
   }
@@ -1002,6 +1075,8 @@ export default {
       return stub.fetch(request)
     } else if (url.pathname === "/flush_emote_cache") {
       return stub.flush_emote_cache()
+    } else if (url.pathname === "/session_debug") {
+      return stub.session_debug(request)
     }
 
     return await sveltekit_worker.fetch(request, env, _ctx)

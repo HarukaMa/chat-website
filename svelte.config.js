@@ -29,6 +29,9 @@ const config = {
   // for more information about preprocessors
   preprocess: vitePreprocess({ script: true }),
   kit: { adapter: entry_hijack() },
+  compilerOptions: {
+    warningFilter: (warning) => !warning.filename?.includes("node_modules") && !warning.code.startsWith("a11y"),
+  },
 }
 
 export default config
