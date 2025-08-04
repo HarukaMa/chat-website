@@ -23,6 +23,7 @@ export type WSMessageType =
   | { type: "user_leave"; name: string }
   | { type: "connection_count"; count: number }
   | { type: "connection_counts"; data: { session: number; logged_in: number; unique_logged_in: number } }
+  | { type: "auth_success"; name: string; name_color: string }
   // client -> server
   | { type: "authenticate"; session: string }
   | { type: "send_message"; message: string }
@@ -34,13 +35,16 @@ export type WSMessageType =
   | { type: "history_request" }
   | { type: "get_connection_count" }
   | { type: "get_connection_counts" }
-  // error
+  // messages from server
   | { type: "error"; message: string }
+  | { type: "notification"; message: string }
 
 export type Session = {
   authenticated: boolean
   name: string
   history_requested: boolean
+  // MAKE SURE THIS IS NOT PRINTED OUT FOR LOGGED IN USERS
+  client_ip: string
 }
 
 export type TwitchTokenServer = {
@@ -205,11 +209,16 @@ export class DO extends DurableObject<Env> {
     })
   }
 
-  async fetch(_request: Request): Promise<Response> {
+  async fetch(request: Request): Promise<Response> {
     const webSocketPair = new WebSocketPair()
     const [client, server] = Object.values(webSocketPair)
     this.ctx.acceptWebSocket(server)
-    const session: Session = { authenticated: false, name: "", history_requested: false }
+    const session: Session = {
+      authenticated: false,
+      name: "",
+      history_requested: false,
+      client_ip: request.headers.get("cf-connecting-ip") || "",
+    }
     server.serializeAttachment(session)
     this.sessions.set(server, session)
 
@@ -358,6 +367,13 @@ export class DO extends DurableObject<Env> {
     session.name = await this.twitch_get_user_name(token, msg.session)
     session.authenticated = true
     ws.serializeAttachment(session)
+    ws.send(
+      JSON.stringify({
+        type: "auth_success",
+        name: session.name,
+        color: (await this.ctx.storage.get(`twitch_user_color_${session.name}`)) || "",
+      }),
+    )
     this.broadcast({ type: "user_join", name: session.name })
   }
 
@@ -1021,10 +1037,16 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
     output += "Session count: " + session_count + "\n"
     for (let i = 0; i < ws_connections.length; i++) {
       const ws = ws_connections[i]
-      output += `${i}: state: ${ws.readyState} url: ${ws.url} protocol: ${ws.protocol}\n`
+      output += `${i}: state: ${ws.readyState}\n`
       const session = sessions.get(ws)
       if (session) {
-        output += `  auth: ${session.authenticated} name: ${session.name === "" ? "-" : session.name} hist: ${session.history_requested}\n`
+        output += `  auth: ${session.authenticated} hist: ${session.history_requested} `
+        if (session.authenticated) {
+          output += `name: ${session.name}`
+        } else {
+          output += `ip: ${session.client_ip}`
+        }
+        output += "\n"
         sessions.delete(ws)
       }
     }

@@ -137,7 +137,6 @@
       chat_connected = true
       if (twitch_logged_in && session) {
         await send_chat_message({ type: "authenticate", session })
-        chat_authenticated = true
       }
       await send_chat_message({ type: "history_request" })
       if (chat_session_count_task_id) {
@@ -178,6 +177,10 @@
 
   async function handle_chat_message(message: WSMessageType) {
     switch (message.type) {
+      case "auth_success":
+        chat_authenticated = true
+        chat_messages.push(`Authenticated as ${message.name}`)
+        break
       case "message_history":
         chat_messages = message.messages
         break
@@ -204,6 +207,9 @@
         break
       case "error":
         console.log("chat error:", message.message)
+        chat_messages.push(message.message)
+        break
+      case "notification":
         chat_messages.push(message.message)
         break
       case "message_deleted":
