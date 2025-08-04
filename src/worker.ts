@@ -622,7 +622,9 @@ export class DO extends DurableObject<Env> {
       return
     }
     const ws_connections = this.ctx.getWebSockets()
-    const ws_connection_count = ws_connections.length
+    const ws_connection_count = ws_connections.filter((ws) => {
+      return (this.sessions.has(ws) && this.sessions.get(ws)?.history_requested) || false
+    }).length
     let ws_logged_in_count = 0
     const ws_logged_in_names = new Set<string>()
     ws_connections.forEach((ws) => {
