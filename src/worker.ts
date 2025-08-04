@@ -23,7 +23,7 @@ export type WSMessageType =
   | { type: "user_leave"; name: string }
   | { type: "connection_count"; count: number }
   | { type: "connection_counts"; data: { session: number; logged_in: number; unique_logged_in: number } }
-  | { type: "auth_success"; name: string; name_color: string }
+  | { type: "auth_success"; name: string; name_color: string; timed_out_until: number | null; banned: boolean }
   // client -> server
   | { type: "authenticate"; session: string }
   | { type: "send_message"; message: string }
@@ -371,7 +371,9 @@ export class DO extends DurableObject<Env> {
       JSON.stringify({
         type: "auth_success",
         name: session.name,
-        color: (await this.ctx.storage.get(`twitch_user_color_${session.name}`)) || "",
+        color: (await this.ctx.storage.get<string>(`twitch_user_color_${session.name}`)) || "",
+        timed_out_until: (await this.ctx.storage.get<number>(`timeout_${session.name}`)) || null,
+        banned: (await this.ctx.storage.get<boolean>(`ban_${session.name}`)) || false,
       }),
     )
     this.broadcast({ type: "user_join", name: session.name })
