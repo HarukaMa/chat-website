@@ -143,9 +143,9 @@
       if (chat_session_count_task_id) {
         clearInterval(chat_session_count_task_id)
       }
-      await send_chat_message({ type: "get_connection_count" })
+      await send_chat_message({ type: "get_connection_counts" })
       chat_session_count_task_id = setInterval(async () => {
-        await send_chat_message({ type: "get_connection_count" })
+        await send_chat_message({ type: "get_connection_counts" })
       }, 30000)
     }
     chat_ws.onclose = (e: CloseEvent) => {
