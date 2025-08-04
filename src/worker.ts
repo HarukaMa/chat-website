@@ -371,7 +371,7 @@ export class DO extends DurableObject<Env> {
       JSON.stringify({
         type: "auth_success",
         name: session.name,
-        color: (await this.ctx.storage.get<string>(`twitch_user_color_${session.name}`)) || "",
+        name_color: (await this.ctx.storage.get<string>(`twitch_user_color_${session.name}`)) || "",
         timed_out_until: (await this.ctx.storage.get<number>(`timeout_${session.name}`)) || null,
         banned: (await this.ctx.storage.get<boolean>(`ban_${session.name}`)) || false,
       }),
