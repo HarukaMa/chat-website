@@ -245,11 +245,11 @@
     if (e.key === "Enter") {
       e.preventDefault()
       if (input.trim() === "") return
-      await send_chat_message({ type: "send_message", message: input })
+      await send_chat_message({ type: "send_message", message: input.trim() })
       chat_input_element!.innerText = ""
     } else if (e.key === "Tab") {
       e.preventDefault()
-      autocomplete_emote(input)
+      autocomplete(input)
     } else {
       autocomplete_partial = ""
       autocomplete_candidates = []
@@ -263,7 +263,7 @@
   let autocomplete_current_index = 0
   let autocomplete_first_tab = true
 
-  function autocomplete_emote(input: string) {
+  function autocomplete(input: string) {
     if (input === "") return
     const current_selection = window.getSelection()!
     const current_range = current_selection.getRangeAt(0)
@@ -542,14 +542,14 @@
   }
 
   function insert_emote(emote: string) {
-    const input = chat_input_element!.innerText
+    const input = chat_input_element!.textContent ?? ""
     let insert = ""
-    if (!input.endsWith(" ")) {
+    if (input !== "" && !input.endsWith(" ")) {
       insert = ` ${emote} `
     } else {
       insert = `${emote} `
     }
-    chat_input_element!.innerText = input + insert
+    chat_input_element!.textContent = input + insert
     handle_chat_input()
   }
 
@@ -723,6 +723,7 @@
       padding: 0.25rem;
       font-size: 14px;
       overflow-wrap: anywhere;
+      white-space: pre-wrap;
 
       &:focus {
         outline: none;
