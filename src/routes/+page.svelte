@@ -414,6 +414,13 @@
         trackingThreshold: 0,
         liveTolerance: 5,
       },
+      html5: {
+        vhs: {
+          overrideNative: !videojs.browser.IS_IPHONE,
+        },
+        nativeAudioTracks: videojs.browser.IS_IPHONE,
+        nativeVideoTracks: videojs.browser.IS_IPHONE,
+      },
     })
     change_stream_type()
 
@@ -525,6 +532,18 @@
         }
       }
     }
+  }
+
+  function insert_emote(emote: string) {
+    const input = chat_input_element!.innerText
+    let insert = ""
+    if (!input.endsWith(" ")) {
+      insert = ` ${emote} `
+    } else {
+      insert = `${emote} `
+    }
+    chat_input_element!.innerText = input + insert
+    handle_chat_input()
   }
 
   if (browser) {
@@ -734,7 +753,7 @@
     background-color: #ffffffc0;
   }
 
-  [contenteditable="plaintext-only"]:empty:before {
+  #chat-input-field:empty:before {
     content: attr(data-placeholder);
     color: grey;
   }
@@ -812,7 +831,7 @@
       <div id="chat-messages" bind:this={chat_messages_container} onscroll={on_chat_scroll}>
         {#each chat_messages as message (message.id)}
           <div use:scroll_to_bottom>
-            {#if "type" in message }
+            {#if "type" in message}
               <em style="color: #aaa">{message.message}</em>
             {:else}
               <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} {is_admin} {delete_message} logged_in_user={name} />
@@ -834,7 +853,7 @@
             oninput={handle_chat_input}
           ></span>
           <div id="chat-input-counter">
-<!--            <EmotePanel {twitch_emotes} {seventv_emotes} />-->
+            <EmotePanel {twitch_emotes} {seventv_emotes} {insert_emote} />
             {#if chat_input_length > 300}
               {500 - chat_input_length}
             {/if}
