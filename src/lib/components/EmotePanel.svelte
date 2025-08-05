@@ -3,6 +3,7 @@
   import emote_icon from "$lib/assets/fa-face-smile.svg"
   import { computePosition, flip, shift, offset } from "@floating-ui/dom"
   import ChatMessageEmote from "$lib/components/ChatMessageEmote.svelte"
+  import { lower_cmp } from "$lib/utils"
 
   type EmotePanelProps = {
     twitch_emotes: TwitchEmotes | null
@@ -17,14 +18,6 @@
 
   let twitch_emotes: PanelTwitchEmotes = $state(new Map())
   let seventv_emotes: PanelSevenTVEmotes = $state(new Map())
-
-  function lower_cmp(a: string, b: string): number {
-    const a_lower = a.toLowerCase()
-    const b_lower = b.toLowerCase()
-    if (a_lower === b_lower) return 0
-    if (a_lower < b_lower) return -1
-    return 1
-  }
 
   if (twitch_emotes_map !== null) {
     for (const [name, emote] of twitch_emotes_map) {
@@ -74,7 +67,6 @@
   }
 
   function handle_click_outside(event: MouseEvent) {
-    console.log("event target", event.target)
     if (
       emote_panel_open &&
       emote_panel &&

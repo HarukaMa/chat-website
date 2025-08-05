@@ -15,6 +15,7 @@
   import PlayerControlMenu from "$lib/components/PlayerControlMenu.svelte"
   import ChatConnectionCount from "$lib/components/ChatConnectionCount.svelte"
   import EmotePanel from "$lib/components/EmotePanel.svelte"
+  import { lower_cmp } from "$lib/utils"
 
   let { data } = $props()
   let session = $state(data.session)
@@ -114,6 +115,8 @@
 
   let chat_reconnection_timeout = $state(0)
 
+  let online_users: string[] = $state([])
+
   async function reconnect_chat() {
     if (chat_reconnection_timeout === 0) {
       chat_reconnecting = true
@@ -139,6 +142,7 @@
       if (twitch_logged_in && session) {
         await send_chat_message({ type: "authenticate", session })
       }
+      await send_chat_message({ type: "user_list" })
       await send_chat_message({ type: "history_request" })
       if (chat_session_count_task_id) {
         clearInterval(chat_session_count_task_id)
@@ -197,12 +201,19 @@
           chat_messages = chat_messages.slice(-1000)
         }
         break
+      case "user_list":
+        online_users = message.users!
+        break
       case "user_join":
-        // console.log("user joined:", message.name)
+        online_users.push(message.name)
         break
-      case "user_leave":
-        // console.log("user left:", message.name)
+      case "user_leave": {
+        const index = online_users.indexOf(message.name)
+        if (index !== -1) {
+          online_users.splice(index, 1)
+        }
         break
+      }
       case "user_timed_out":
         add_non_chat_message("notification", `${message.name} has been timed out for ${message.duration} seconds`)
         break
@@ -238,23 +249,19 @@
       chat_input_element!.innerText = ""
     } else if (e.key === "Tab") {
       e.preventDefault()
-      if (input.endsWith("@")) {
-        // autocomplete users
-      } else {
-        autocomplete_emote(input)
-      }
+      autocomplete_emote(input)
     } else {
-      emote_partial = ""
-      emote_candidates = []
-      emote_current_index = 0
-      emote_first_tab = true
+      autocomplete_partial = ""
+      autocomplete_candidates = []
+      autocomplete_current_index = 0
+      autocomplete_first_tab = true
     }
   }
 
-  let emote_partial = ""
-  let emote_candidates: string[] = []
-  let emote_current_index = 0
-  let emote_first_tab = true
+  let autocomplete_partial = ""
+  let autocomplete_candidates: string[] = []
+  let autocomplete_current_index = 0
+  let autocomplete_first_tab = true
 
   function autocomplete_emote(input: string) {
     if (input === "") return
@@ -262,65 +269,64 @@
     const current_range = current_selection.getRangeAt(0)
     console.log("current selection", current_selection)
     console.log("current range", current_range)
-    if (emote_partial === "") {
+    if (autocomplete_partial === "") {
       // get the word just before the cursor
       const input_before_cursor = input.slice(0, current_range.startOffset)
       const words = input_before_cursor.split(" ")
-      emote_partial = words[words.length - 1].toLowerCase()
-      if (emote_partial === "") return
-      emote_candidates =
-        seventv_emotes
-          ?.keys()
-          .filter((emote) => emote.toLowerCase().startsWith(emote_partial))
-          .toArray() ?? []
-      emote_candidates = emote_candidates.concat(
-        twitch_emotes
-          ?.keys()
-          .filter((emote) => emote.toLowerCase().startsWith(emote_partial))
-          .toArray() ?? [],
-      )
-      emote_candidates.sort((a, b) => {
-        const a_lower = a.toLowerCase()
-        const b_lower = b.toLowerCase()
-        if (a_lower === b_lower) return 0
-        if (a_lower < b_lower) return -1
-        return 1
-      })
-    }
-    console.log("emote partial", emote_partial)
-    console.log("emote candidates", emote_candidates)
-    if (emote_candidates.length === 0) return
-    console.log("emote current index", emote_current_index)
-    const input_cursor = current_range.startOffset
-    let backtrack_length = emote_partial.length
-    if (!emote_first_tab) {
-      let previous_index = emote_current_index - 1
-      if (emote_current_index === 0) {
-        previous_index = emote_candidates.length - 1
+      autocomplete_partial = words[words.length - 1].toLowerCase()
+      if (autocomplete_partial === "") return
+      if (autocomplete_partial.startsWith("@")) {
+        autocomplete_partial = autocomplete_partial.slice(1)
+        autocomplete_candidates = online_users.filter((user) => user.toLowerCase().startsWith(autocomplete_partial))
+      } else {
+        autocomplete_candidates =
+          seventv_emotes
+            ?.keys()
+            .filter((emote) => emote.toLowerCase().startsWith(autocomplete_partial))
+            .toArray() ?? []
+        autocomplete_candidates = autocomplete_candidates.concat(
+          twitch_emotes
+            ?.keys()
+            .filter((emote) => emote.toLowerCase().startsWith(autocomplete_partial))
+            .toArray() ?? [],
+        )
       }
-      const previous_emote = emote_candidates[previous_index]
-      console.log("previous emote", previous_emote)
-      backtrack_length = previous_emote.length
+      autocomplete_candidates.sort(lower_cmp)
+    }
+    console.log("autocomplete partial", autocomplete_partial)
+    console.log("autocomplete candidates", autocomplete_candidates)
+    if (autocomplete_candidates.length === 0) return
+    console.log("autocomplete current index", autocomplete_current_index)
+    const input_cursor = current_range.startOffset
+    let backtrack_length = autocomplete_partial.length
+    if (!autocomplete_first_tab) {
+      let previous_index = autocomplete_current_index - 1
+      if (autocomplete_current_index === 0) {
+        previous_index = autocomplete_candidates.length - 1
+      }
+      const previous_autocomplete = autocomplete_candidates[previous_index]
+      console.log("previous autocomplete", previous_autocomplete)
+      backtrack_length = previous_autocomplete.length
     }
     console.log("backtrack length", backtrack_length)
-    emote_first_tab = false
+    autocomplete_first_tab = false
     const input_before_cursor = input.slice(0, input_cursor - backtrack_length)
     console.log("input before cursor", input_before_cursor)
     const input_after_cursor = input.slice(input_cursor)
     console.log("input after cursor", input_after_cursor)
-    const emote_next_candidate = emote_candidates[emote_current_index]
-    console.log("emote next candidate", emote_next_candidate)
-    chat_input_element!.innerText = input_before_cursor + emote_next_candidate + input_after_cursor
+    const autocomplete_next_candidate = autocomplete_candidates[autocomplete_current_index]
+    console.log("autocomplete next candidate", autocomplete_next_candidate)
+    chat_input_element!.innerText = input_before_cursor + autocomplete_next_candidate + input_after_cursor
     console.log("chat input", chat_input_element!.innerText)
     const range = document.createRange()
-    range.setStart(chat_input_element!.childNodes[0], input_before_cursor.length + emote_next_candidate.length)
-    console.log("range start", input_before_cursor.length + emote_next_candidate.length)
+    range.setStart(chat_input_element!.childNodes[0], input_before_cursor.length + autocomplete_next_candidate.length)
+    console.log("range start", input_before_cursor.length + autocomplete_next_candidate.length)
     range.collapse(true)
     const selection = window.getSelection()
     selection!.removeAllRanges()
     selection!.addRange(range)
-    emote_current_index = (emote_current_index + 1) % emote_candidates.length
-    console.log("emote next index", emote_current_index)
+    autocomplete_current_index = (autocomplete_current_index + 1) % autocomplete_candidates.length
+    console.log("autocomplete next index", autocomplete_current_index)
   }
 
   async function handle_chat_input() {
