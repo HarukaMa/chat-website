@@ -150,12 +150,19 @@
 </style>
 
 {#snippet emote_snippet(url_1x: string, url_2x: string, url_3x: string, url_4x: string, name: string, width: number)}
-  <img class="emote" src={url_1x} srcset="{url_1x} 1x, {url_2x} 2x, {url_3x} 3x, {url_4x} 4x" alt={name} style="width: {width}px" />
+  <img
+    loading="lazy"
+    class="emote"
+    src={url_1x}
+    srcset="{url_1x} 1x, {url_2x} 2x, {url_3x} 3x, {url_4x} 4x"
+    alt={name}
+    style="width: {width}px"
+  />
 {/snippet}
 
 {#snippet emote_popup_snippet(url_4x: string, name: string, width: number, set_name: string, owner: string)}
   <div class="popup-emote-section">
-    <img class="popup-emote" src={url_4x} alt={name} style="width: {width * 4}px" />
+    <img loading="lazy" class="popup-emote" src={url_4x} alt={name} style="width: {width * 4}px" />
     <div class="popup-emote-name">{name}</div>
     <div class="popup-emote-set-name">{set_name}</div>
     {#if owner !== ""}
