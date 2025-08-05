@@ -43,8 +43,9 @@ export type Session = {
   authenticated: boolean
   name: string
   history_requested: boolean
-  // MAKE SURE THIS IS NOT PRINTED OUT FOR LOGGED IN USERS
+  // MAKE SURE THIS IS NOT PRINTED OUT FOR LOGGED-IN USERS
   client_ip: string
+  last_messages: number[]
 }
 
 export type TwitchTokenServer = {
@@ -217,6 +218,7 @@ export class DO extends DurableObject<Env> {
       name: "",
       history_requested: false,
       client_ip: request.headers.get("cf-connecting-ip") || "",
+      last_messages: [],
     }
     server.serializeAttachment(session)
     this.sessions.set(server, session)
@@ -404,11 +406,17 @@ export class DO extends DurableObject<Env> {
       ws.send(JSON.stringify({ type: "error", message: "Message cannot be empty" }))
       return
     }
-    const last_message_time = await this.ctx.storage.get<number>(`last_message_time_${session.name}`)
     const now = Date.now()
-    if (this.admins.indexOf(session.name) === -1 && last_message_time !== undefined && now - last_message_time < 1000) {
-      ws.send(JSON.stringify({ type: "error", message: "You can only send one message per second" }))
-      return
+    session.last_messages.push(now)
+    if (session.last_messages.length > 5) {
+      session.last_messages.shift()
+    }
+    if (session.last_messages.length == 5) {
+      if (this.admins.indexOf(session.name) === -1 && now - session.last_messages[0] < 3000) {
+        await this.ctx.storage.put(`timeout_${session.name}`, now + 10000)
+        this.broadcast({ type: "user_timed_out", name: session.name, duration: 10 })
+        return
+      }
     }
     if (msg.message.length > 500) {
       ws.send(JSON.stringify({ type: "error", message: "Message too long" }))
@@ -443,7 +451,6 @@ export class DO extends DurableObject<Env> {
     if (color === undefined) {
       color = ""
     }
-    await this.ctx.storage.put(`last_message_time_${session.name}`, now)
     this.broadcast({
       type: "new_message",
       message: { id, name: session.name, name_color: color, message: msg.message, timestamp_ms: now },
