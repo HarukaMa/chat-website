@@ -139,18 +139,17 @@ export type SevenTVEmoteSetServer = {
   }
 }
 
-export type SevenTVEmotes = Map<
-  string,
-  {
-    zero_width: boolean
-    animated: boolean
-    url: string
-    owner: string
-    height: number
-    width: number
-    set_name: string
-  }
->
+export type SevenTVEmote = {
+  zero_width: boolean
+  animated: boolean
+  url: string
+  owner: string
+  height: number
+  width: number
+  set_name: string
+}
+
+export type SevenTVEmotes = Map<string, SevenTVEmote>
 
 export type SevenTVEmotesCache = {
   data: SevenTVEmotes

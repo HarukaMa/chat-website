@@ -14,6 +14,7 @@
   import type QualityLevel from "videojs-contrib-quality-levels/dist/types/quality-level"
   import PlayerControlMenu from "$lib/components/PlayerControlMenu.svelte"
   import ChatConnectionCount from "$lib/components/ChatConnectionCount.svelte"
+  import EmotePanel from "$lib/components/EmotePanel.svelte"
 
   let { data } = $props()
   let session = $state(data.session)
@@ -108,7 +109,7 @@
 
   let chat_ws: WebSocket | undefined
 
-  let chat_messages: (ChatMessage | string)[] = $state([])
+  let chat_messages: (ChatMessage | { id: string; type: "error" | "notification"; message: string })[] = $state([])
   let chat_messages_container: HTMLDivElement
 
   let chat_reconnection_timeout = $state(0)
@@ -149,7 +150,7 @@
     }
     chat_ws.onclose = (e: CloseEvent) => {
       console.log("chat disconnected")
-      chat_messages.push("disconnected from chat server")
+      add_non_chat_message("error", "disconnected from chat server")
       chat_connected = false
       if (chat_session_count_task_id) {
         clearInterval(chat_session_count_task_id)
@@ -161,7 +162,7 @@
     }
     chat_ws.onerror = (e) => {
       console.log("chat error", e)
-      chat_messages.push(`disconnected from chat server with error: ${e}`)
+      add_non_chat_message("error", `disconnected from chat server with error: ${e}`)
       chat_connected = false
     }
     chat_ws.onmessage = (e) => {
@@ -179,11 +180,17 @@
     switch (message.type) {
       case "auth_success":
         chat_authenticated = true
-        chat_messages.push(`Authenticated as ${message.name}`)
+        add_non_chat_message("notification", `Authenticated as ${message.name}`)
         break
-      case "message_history":
-        chat_messages = message.messages
+      case "message_history": {
+        const existing_ids = new Set(chat_messages.map((m) => m.id))
+        for (const m of message.messages) {
+          if (!existing_ids.has(m.id)) {
+            chat_messages.push(m)
+          }
+        }
         break
+      }
       case "new_message":
         chat_messages.push(message.message)
         if (chat_messages.length > 500) {
@@ -197,25 +204,29 @@
         // console.log("user left:", message.name)
         break
       case "user_timed_out":
-        chat_messages.push(`${message.name} has been timed out for ${message.duration} seconds`)
+        add_non_chat_message("notification", `${message.name} has been timed out for ${message.duration} seconds`)
         break
       case "user_banned":
-        chat_messages.push(`${message.name} has been banned`)
+        add_non_chat_message("notification", `${message.name} has been banned`)
         break
       case "connection_counts":
         chat_session_counts = message.data
         break
       case "error":
         console.log("chat error:", message.message)
-        chat_messages.push(message.message)
+        add_non_chat_message("error", message.message)
         break
       case "notification":
-        chat_messages.push(message.message)
+        add_non_chat_message("notification", message.message)
         break
       case "message_deleted":
         message_deleted(message.id)
         break
     }
+  }
+
+  function add_non_chat_message(type: "error" | "notification", message: string) {
+    chat_messages.push({ id: window.crypto.randomUUID(), type, message })
   }
 
   async function handle_chat_keydown(e: KeyboardEvent) {
@@ -705,6 +716,8 @@
     margin-bottom: 0.25rem;
     height: 100%;
     display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
     align-items: end;
   }
 
@@ -797,10 +810,10 @@
         {/if}
       </div>
       <div id="chat-messages" bind:this={chat_messages_container} onscroll={on_chat_scroll}>
-        {#each chat_messages as message (message)}
+        {#each chat_messages as message (message.id)}
           <div use:scroll_to_bottom>
-            {#if typeof message === "string"}
-              <em style="color: #aaa">{message}</em>
+            {#if "type" in message }
+              <em style="color: #aaa">{message.message}</em>
             {:else}
               <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} {is_admin} {delete_message} logged_in_user={name} />
             {/if}
@@ -821,6 +834,7 @@
             oninput={handle_chat_input}
           ></span>
           <div id="chat-input-counter">
+<!--            <EmotePanel {twitch_emotes} {seventv_emotes} />-->
             {#if chat_input_length > 300}
               {500 - chat_input_length}
             {/if}
