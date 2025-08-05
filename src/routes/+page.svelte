@@ -193,8 +193,8 @@
       }
       case "new_message":
         chat_messages.push(message.message)
-        if (chat_messages.length > 500) {
-          chat_messages = chat_messages.slice(-500)
+        if (chat_messages.length > 1000) {
+          chat_messages = chat_messages.slice(-1000)
         }
         break
       case "user_join":
