@@ -212,12 +212,10 @@
 </div>
 <div class="emote-panel" bind:this={emote_panel}>
   <input type="search" class="emote-search-input" bind:value={emote_search_value} placeholder="Search emotes" oninput={search_emotes} />
-  {#if emote_search_value === ""}
-    <div class="emote-panel-tabs">
-      <button class="emote-panel-tab active" bind:this={twitch_button} onclick={switch_tab}>Twitch</button>
-      <button class="emote-panel-tab" bind:this={seventv_button} onclick={switch_tab}>7TV</button>
-    </div>
-  {/if}
+  <div class="emote-panel-tabs" style:display={emote_search_value === "" ? "" : "none"}>
+    <button class="emote-panel-tab active" bind:this={twitch_button} onclick={switch_tab}>Twitch</button>
+    <button class="emote-panel-tab" bind:this={seventv_button} onclick={switch_tab}>7TV</button>
+  </div>
   <div class="emote-panel-list">
     <div class="emote-panel-list-page" style:display={emote_search_value === "" ? "none" : ""}>
       {#each filtered_emotes as name (name)}
