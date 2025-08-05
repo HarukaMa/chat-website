@@ -139,6 +139,7 @@
     chat_ws = new WebSocket(`wss://player.sw.arm.fm/chat`)
     chat_ws.onopen = async () => {
       chat_connected = true
+      add_non_chat_message("notification", "connected to chat server")
       if (twitch_logged_in && session) {
         await send_chat_message({ type: "authenticate", session })
       }
