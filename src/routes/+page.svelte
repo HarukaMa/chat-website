@@ -404,6 +404,7 @@
     }
 
     console.log("videojs init")
+    const is_apple_mobile = videojs.browser.IS_IPHONE || videojs.browser.IS_IPAD
     player = videojs(node, {
       autoplay: true,
       controls: true,
@@ -416,10 +417,10 @@
       },
       html5: {
         vhs: {
-          overrideNative: !videojs.browser.IS_IPHONE,
+          overrideNative: !is_apple_mobile,
         },
-        nativeAudioTracks: videojs.browser.IS_IPHONE,
-        nativeVideoTracks: videojs.browser.IS_IPHONE,
+        nativeAudioTracks: is_apple_mobile,
+        nativeVideoTracks: is_apple_mobile,
       },
     })
     change_stream_type()

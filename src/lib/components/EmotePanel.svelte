@@ -18,6 +18,14 @@
   let twitch_emotes: PanelTwitchEmotes = $state(new Map())
   let seventv_emotes: PanelSevenTVEmotes = $state(new Map())
 
+  function lower_cmp(a: string, b: string): number {
+    const a_lower = a.toLowerCase()
+    const b_lower = b.toLowerCase()
+    if (a_lower === b_lower) return 0
+    if (a_lower < b_lower) return -1
+    return 1
+  }
+
   if (twitch_emotes_map !== null) {
     for (const [name, emote] of twitch_emotes_map) {
       if (!twitch_emotes.has(emote.channel)) {
@@ -26,13 +34,7 @@
       twitch_emotes.get(emote.channel)!.push(name)
     }
     for (const emotes of twitch_emotes) {
-      emotes[1].sort((a, b) => {
-        const a_lower = a[0].toLowerCase()
-        const b_lower = b[0].toLowerCase()
-        if (a_lower === b_lower) return 0
-        if (a_lower < b_lower) return -1
-        return 1
-      })
+      emotes[1].sort(lower_cmp)
     }
   }
   if (seventv_emotes_map !== null) {
@@ -43,13 +45,7 @@
       seventv_emotes.get(emote.set_name)!.push(name)
     }
     for (const emotes of seventv_emotes) {
-      emotes[1].sort((a, b) => {
-        const a_lower = a[0].toLowerCase()
-        const b_lower = b[0].toLowerCase()
-        if (a_lower === b_lower) return 0
-        if (a_lower < b_lower) return -1
-        return 1
-      })
+      emotes[1].sort(lower_cmp)
     }
   }
 
@@ -121,13 +117,7 @@
     for (const emotes of seventv_emotes.values()) {
       filtered_emotes.push(...emotes.filter((emote) => emote.toLowerCase().includes(emote_search_value.toLowerCase())))
     }
-    filtered_emotes.sort((a, b) => {
-      const a_lower = a.toLowerCase()
-      const b_lower = b.toLowerCase()
-      if (a_lower === b_lower) return 0
-      if (a_lower < b_lower) return -1
-      return 1
-    })
+    filtered_emotes.sort(lower_cmp)
   }
 </script>
 
