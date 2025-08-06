@@ -1,4 +1,40 @@
-// noinspection SqlNoDataSourceInspection
+/**
+ * KV used:
+ *
+ * `twitch_token`: app twitch token
+ *
+ * `twitch_user_token_{session}`: session -> twitch tokens (incl. refresh token)
+ *
+ * `twitch_user_name_{session}`: session -> display name cache (legacy)
+ *
+ * `twitch_user_cache_expires_{session}`: session -> timestamp of user info cache expiration (legacy)
+ *
+ * `timeout_{display_name}`: display name -> timestamp of timeout expiration (legacy)
+ *
+ * `ban_{display_name}`: display name -> true if user is banned (legacy)
+ *
+ * `twitch_user_id_{session}`: session -> user id
+ *
+ * `twitch_user_cache_expires_{id}`: id -> timestamp of user info cache expiration
+ *
+ * `twitch_user_id_from_name_{display_name}`: display name -> user id for operations on name
+ *
+ * `twitch_user_name_{id}`: user id -> display name
+ *
+ * `twitch_user_color_{id}`: user id -> display name color
+ *
+ * `twitch_user_color_{display_name}`: display name -> display name color (keep for db compat)
+ *
+ * `timeout_{id}`: user id -> timestamp of timeout expiration
+ *
+ * `ban_{id}`: user id -> true if user is banned
+ *
+ * `twitch_emotes`: emote cache
+ *
+ * `seventv_emotes`: emote cache
+ *
+ *
+ */
 
 import sveltekit_worker from "./_worker.js"
 
@@ -11,6 +47,7 @@ export type ChatMessage = {
   message: string
   timestamp_ms: number
   roles: string[] // Add roles to chat messages
+  user_id: string
 }
 
 export type WSMessageType =
@@ -24,7 +61,7 @@ export type WSMessageType =
   | { type: "user_leave"; name: string }
   | { type: "connection_count"; count: number }
   | { type: "connection_counts"; data: { session: number; logged_in: number; unique_logged_in: number } }
-  | { type: "auth_success"; name: string; name_color: string; timed_out_until: number | null; banned: boolean }
+  | { type: "auth_success"; name: string; user_id: number; name_color: string; timed_out_until: number | null; banned: boolean }
   | { type: "role_updated"; name: string; roles: string[] } // Add role update message
   // client -> server
   | { type: "authenticate"; session: string }
@@ -50,6 +87,7 @@ export type Session = {
   // MAKE SURE THIS IS NOT PRINTED OUT FOR LOGGED-IN USERS
   client_ip: string
   last_messages: number[]
+  user_id: string
 }
 
 export type TwitchTokenServer = {
@@ -220,6 +258,7 @@ export class DO extends DurableObject<Env> {
       history_requested: false,
       client_ip: request.headers.get("cf-connecting-ip") || "",
       last_messages: [],
+      user_id: "",
     }
     server.serializeAttachment(session)
     this.sessions.set(server, session)
@@ -231,20 +270,37 @@ export class DO extends DurableObject<Env> {
   }
 
   private init_database() {
-    const cursor = this.ctx.storage.sql.exec(`PRAGMA table_list`)
-    if ([...cursor].find((t) => t.name === "messages")) {
-      return
+    let cursor = this.ctx.storage.sql.exec(`PRAGMA table_list`)
+    const tables = cursor.toArray()
+
+    // init migrations table
+    if (!tables.find((t) => t.name === "migrations")) {
+      this.ctx.storage.sql.exec(
+        `CREATE TABLE migrations (
+          id INTEGER PRIMARY KEY
+        )`,
+      )
     }
 
-    this.ctx.storage.sql.exec(
-      `CREATE TABLE messages ( \
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        message TEXT NOT NULL,
-        timestamp_ms INTEGER NOT NULL
-      )`,
-    )
-    this.ctx.storage.sql.exec(`CREATE INDEX idx_timestamp ON messages (timestamp_ms DESC)`)
+    // init messages table
+    if (!tables.find((t) => t.name === "messages")) {
+      this.ctx.storage.sql.exec(
+        `CREATE TABLE messages ( 
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          message TEXT NOT NULL,
+          timestamp_ms INTEGER NOT NULL
+        )`,
+      )
+      this.ctx.storage.sql.exec(`CREATE INDEX idx_timestamp ON messages (timestamp_ms DESC)`)
+    }
+
+    // migration 1: add user_id column to messages table
+    cursor = this.ctx.storage.sql.exec("SELECT id FROM migrations WHERE id = 1")
+    if (cursor.toArray().length === 0) {
+      this.ctx.storage.sql.exec(`ALTER TABLE messages ADD COLUMN user_id TEXT NOT NULL DEFAULT ""`)
+      this.ctx.storage.sql.exec(`INSERT INTO migrations (id) VALUES (1)`)
+    }
   }
 
   private broadcast(message: WSMessageType) {
@@ -257,6 +313,11 @@ export class DO extends DurableObject<Env> {
     return Array.from(this.sessions.values(), (s) => s.name)
       .filter(Boolean)
       .sort()
+  }
+
+  private async is_user_banned(name: string, user_id: string) {
+    // unfortunately we do have a banned user, so we need to check both keys
+    return (await this.ctx.storage.get<boolean>(`ban_${name}`)) || (await this.ctx.storage.get<boolean>(`ban_${user_id}`))
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
@@ -327,10 +388,6 @@ export class DO extends DurableObject<Env> {
         break
       }
 
-      case "get_connection_count":
-        ws.send(JSON.stringify({ type: "connection_count", count: this.ctx.getWebSockets().length }))
-        break
-
       case "assign_role": {
         await this.ws_assign_role(msg, session, ws)
         break
@@ -340,6 +397,10 @@ export class DO extends DurableObject<Env> {
         await this.ws_remove_role(msg, session, ws)
         break
       }
+
+      case "get_connection_count":
+        ws.send(JSON.stringify({ type: "connection_count", count: this.ctx.getWebSockets().length }))
+        break
 
       case "get_connection_counts":
         await this.ws_get_connection_counts(msg, session, ws)
@@ -376,16 +437,18 @@ export class DO extends DurableObject<Env> {
         return
       }
     }
-    session.name = await this.twitch_get_user_name(token, msg.session)
+    const user_data = await this.twitch_get_user_info(token, msg.session)
+    session.name = user_data.name
+    session.user_id = user_data.user_id
     session.authenticated = true
     ws.serializeAttachment(session)
     ws.send(
       JSON.stringify({
         type: "auth_success",
         name: session.name,
-        name_color: (await this.ctx.storage.get<string>(`twitch_user_color_${session.name}`)) || "",
-        timed_out_until: (await this.ctx.storage.get<number>(`timeout_${session.name}`)) || null,
-        banned: (await this.ctx.storage.get<boolean>(`ban_${session.name}`)) || false,
+        name_color: user_data.name_color,
+        timed_out_until: (await this.ctx.storage.get<number>(`timeout_${user_data.user_id}`)) || null,
+        banned: await this.is_user_banned(user_data.name, user_data.user_id),
       }),
     )
     this.broadcast({ type: "user_join", name: session.name })
@@ -403,12 +466,12 @@ export class DO extends DurableObject<Env> {
       ws.close(1007, "invalid message content")
       return
     }
-    const user_ban = await this.ctx.storage.get<boolean>(`ban_${session.name}`)
+    const user_ban = await this.is_user_banned(session.name, session.user_id)
     if (user_ban) {
       ws.send(JSON.stringify({ type: "error", message: "You are banned from chat" }))
       return
     }
-    const user_timeout = await this.ctx.storage.get<number>(`timeout_${session.name}`)
+    const user_timeout = await this.ctx.storage.get<number>(`timeout_${session.user_id}`)
     if (user_timeout !== undefined && user_timeout > Date.now()) {
       ws.send(JSON.stringify({ type: "error", message: "You are currently timed out" }))
       return
@@ -423,9 +486,9 @@ export class DO extends DurableObject<Env> {
       session.last_messages.shift()
     }
     if (session.last_messages.length == 5) {
-      if (this.admins.indexOf(session.name) === -1 && now - session.last_messages[0] < 3000) {
-        await this.ctx.storage.put(`timeout_${session.name}`, now + 10000)
-        this.broadcast({ type: "user_timed_out", name: session.name, duration: 10 })
+      if (this.admins.indexOf(session.name) === -1 && now - session.last_messages[0] < 5000) {
+        await this.ctx.storage.put(`timeout_${session.user_id}`, now + 10000)
+        this.broadcast({ type: "user_timed_out", name: session.name, duration: 30 })
         return
       }
     }
@@ -446,9 +509,9 @@ export class DO extends DurableObject<Env> {
     }
 
     const result = this.ctx.storage.sql.exec<{ id: number }>(
-      `INSERT INTO messages (name, message, timestamp_ms)
-           VALUES (?, ?, ?) RETURNING id`,
-      ...[session.name, msg.message, now],
+      `INSERT INTO messages (name, message, timestamp_ms, user_id)
+           VALUES (?, ?, ?, ?) RETURNING id`,
+      ...[session.name, msg.message, now, session.user_id],
     )
     let id: number | undefined
     for (const row of result) {
@@ -458,15 +521,14 @@ export class DO extends DurableObject<Env> {
       ws.send(JSON.stringify({ type: "error", message: "Failed to store message" }))
       return
     }
-    let color = await this.ctx.storage.get<string>(`twitch_user_color_${session.name}`)
+    let color = await this.ctx.storage.get<string>(`twitch_user_color_${session.user_id}`)
     if (color === undefined) {
       color = ""
     }
     const roles = await this.get_user_roles(session.name) // Get user roles
-    await this.ctx.storage.put(`last_message_time_${session.name}`, now)
     this.broadcast({
       type: "new_message",
-      message: { id, name: session.name, name_color: color, message: msg.message, timestamp_ms: now, roles },
+      message: { id, name: session.name, name_color: color, message: msg.message, timestamp_ms: now, roles, user_id: session.user_id },
     })
   }
 
@@ -477,8 +539,8 @@ export class DO extends DurableObject<Env> {
     }
     session.history_requested = true
     ws.serializeAttachment(session)
-    const messages = this.ctx.storage.sql.exec<{ id: number; name: string; message: string; timestamp_ms: number }>(
-      `SELECT id, name, message, timestamp_ms
+    const messages = this.ctx.storage.sql.exec<{ id: number; name: string; message: string; timestamp_ms: number; user_id: string }>(
+      `SELECT id, name, message, timestamp_ms, user_id
            FROM messages
            ORDER BY timestamp_ms DESC
            LIMIT 500`,
@@ -487,13 +549,13 @@ export class DO extends DurableObject<Env> {
     const name_color_cache = new Map<string, string>()
     const roles_cache = new Map<string, string[]>()
     for (const db_message of messages) {
-      const { id, name, message, timestamp_ms } = db_message
+      const { id, name, message, timestamp_ms, user_id } = db_message
       let name_color = name_color_cache.get(name)
       if (name_color === undefined) {
-        name_color = await this.ctx.storage.get<string>(`twitch_user_color_${name}`)
-        if (name_color === undefined) {
-          name_color = ""
-        }
+        name_color =
+          (await this.ctx.storage.get<string>(`twitch_user_color_${user_id}`)) ||
+          (await this.ctx.storage.get<string>(`twitch_user_color_${name}`)) || // can remove this after 3 days past deployment
+          ""
         name_color_cache.set(name, name_color)
       }
       let roles = roles_cache.get(name)
@@ -501,7 +563,7 @@ export class DO extends DurableObject<Env> {
         roles = await this.get_user_roles(name)
         roles_cache.set(name, roles)
       }
-      history_messages.push({ id, name, name_color, message, timestamp_ms, roles })
+      history_messages.push({ id, name, name_color, message, timestamp_ms, roles, user_id })
     }
     ws.send(JSON.stringify({ type: "message_history", messages: history_messages.toReversed() }))
   }
@@ -562,7 +624,12 @@ export class DO extends DurableObject<Env> {
       ws.send(JSON.stringify({ type: "error", message: "You cannot timeout other admins" }))
       return
     }
-    await this.ctx.storage.put(`timeout_${name}`, Date.now() + duration * 1000)
+    const user_id = await this.ctx.storage.get<string>(`twitch_user_id_from_name_${name}`)
+    if (user_id === undefined) {
+      ws.send(JSON.stringify({ type: "error", message: "User not found" }))
+      return
+    }
+    await this.ctx.storage.put(`timeout_${user_id}`, Date.now() + duration * 1000)
     this.broadcast({ type: "user_timed_out", name, duration })
   }
 
@@ -602,7 +669,12 @@ export class DO extends DurableObject<Env> {
       ws.send(JSON.stringify({ type: "error", message: "You cannot ban other admins" }))
       return
     }
-    await this.ctx.storage.put(`ban_${name}`, true)
+    const user_id = await this.ctx.storage.get<string>(`twitch_user_id_from_name_${name}`)
+    if (user_id === undefined) {
+      ws.send(JSON.stringify({ type: "error", message: "User not found" }))
+      return
+    }
+    await this.ctx.storage.put(`ban_${user_id}`, true)
     this.broadcast({ type: "user_banned", name })
   }
 
@@ -638,12 +710,17 @@ export class DO extends DurableObject<Env> {
   }
 
   private async unban_user(name: string, ws: WebSocket) {
-    await this.ctx.storage.delete(`ban_${name}`)
-    ws.send(JSON.stringify({ type: "error", message: `User ${name} has been unbanned` }))
+    const user_id = await this.ctx.storage.get<string>(`twitch_user_id_from_name_${name}`)
+    if (user_id === undefined) {
+      ws.send(JSON.stringify({ type: "error", message: "User not found" }))
+      return
+    }
+    await this.ctx.storage.delete(`ban_${user_id}`)
+    ws.send(JSON.stringify({ type: "notification", message: `User ${name} has been unbanned` }))
   }
 
-  async get_user_roles(username: string): Promise<string[]> {
-    const roles = await this.ctx.storage.get<string[]>(`user_roles_${username}`)
+  async get_user_roles(user_id: string): Promise<string[]> {
+    const roles = await this.ctx.storage.get<string[]>(`user_roles_${user_id}`)
     return roles || []
   }
 
@@ -697,7 +774,7 @@ export class DO extends DurableObject<Env> {
 
   async remove_role(username: string, role: string): Promise<void> {
     const current_roles = await this.get_user_roles(username)
-    const updated_roles = current_roles.filter(r => r !== role)
+    const updated_roles = current_roles.filter((r) => r !== role)
     if (updated_roles.length > 0) {
       await this.ctx.storage.put(`user_roles_${username}`, updated_roles)
     } else {
@@ -802,64 +879,138 @@ export class DO extends DurableObject<Env> {
     }
   }
 
-  private async twitch_get_user_name(twitch_token: TwitchUserToken, session: string): Promise<string> {
-    console.log("Fetching Twitch user name")
-    const cache_expires = await this.ctx.storage.get<number>(`twitch_user_cache_expires_${session}`)
-    console.log("Cache expires", cache_expires)
+  private async fetch_twitch_user_info(
+    twitch_token: TwitchUserToken,
+    session: string,
+  ): Promise<{ name: string; name_color: string; user_id: string }> {
     const now = Date.now() / 1000
-    console.log("Now", now)
-    if (cache_expires === undefined || cache_expires < now) {
-      console.log("Cache expired or not found")
-      const cached_display_name = await this.ctx.storage.get<string>(`twitch_user_name_${session}`)
-      await this.ctx.storage.delete(`twitch_user_name_${session}`)
-      await this.ctx.storage.delete(`twitch_user_id_${session}`)
-      if (cached_display_name !== undefined) {
-        await this.ctx.storage.delete(`twitch_user_color_${cached_display_name}`)
+
+    let response = await fetch("https://api.twitch.tv/helix/users", {
+      headers: {
+        "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${twitch_token.access_token}`,
+      },
+    })
+    if (!response.ok) {
+      console.error("ERROR: Twitch user name fetch failed:", await response.text())
+      throw new Error("Error fetching Twitch user name")
+    }
+    const json = await response.json<TwitchUserServer>()
+    const display_name = json.data[0].display_name
+    const user_id = json.data[0].id
+    await this.ctx.storage.put(`twitch_user_id_${session}`, user_id)
+    await this.ctx.storage.put(`twitch_user_name_${user_id}`, display_name)
+    await this.ctx.storage.put(`twitch_user_id_from_name_${display_name}`, user_id)
+
+    response = await fetch(`https://api.twitch.tv/helix/chat/color?user_id=${user_id}`, {
+      headers: {
+        "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${twitch_token.access_token}`,
+      },
+    })
+    if (!response.ok) {
+      console.error("ERROR: Twitch user color fetch failed:", await response.text())
+      throw new Error("Error fetching Twitch user color")
+    }
+    const color_json = await response.json<TwitchUserColorServer>()
+    const name_color = color_json.data[0].color
+    await this.ctx.storage.put(`twitch_user_color_${user_id}`, name_color)
+
+    await this.ctx.storage.put(`twitch_user_cache_expires_${user_id}`, now + 3600)
+    return { name: display_name, name_color, user_id }
+  }
+
+  private async twitch_get_user_info(
+    twitch_token: TwitchUserToken,
+    session: string,
+  ): Promise<{ name: string; name_color: string; user_id: string }> {
+    const user_id = await this.ctx.storage.get<string>(`twitch_user_id_${session}`)
+    let user_data: { name: string; name_color: string; user_id: string } | null = null
+
+    // make sure that after the logic, the cache is valid and has everything
+    if (user_id === undefined) {
+      // fresh session, just fetch everything
+      user_data = await this.fetch_twitch_user_info(twitch_token, session)
+    } else {
+      // check cached data
+      const cache_expires = await this.ctx.storage.get<number>(`twitch_user_cache_expires_${user_id}`)
+      const now = Date.now() / 1000
+      if (cache_expires === undefined || cache_expires < now) {
+        // cache expired, remove old data and fetch new
+        const cached_name = await this.ctx.storage.get<string>(`twitch_user_name_${user_id}`)
+        await this.ctx.storage.delete(`twitch_user_name_${user_id}`)
+        await this.ctx.storage.delete(`twitch_user_color_${user_id}`)
+        await this.ctx.storage.delete(`twitch_user_id_from_name_${cached_name}`)
+        user_data = await this.fetch_twitch_user_info(twitch_token, session)
+      } else {
+        // otherwise, try to use the cached data
+        const cached_name = await this.ctx.storage.get<string>(`twitch_user_name_${user_id}`)
+        const cached_name_color = await this.ctx.storage.get<string>(`twitch_user_color_${user_id}`)
+        if (cached_name === undefined || cached_name_color === undefined) {
+          // just in case we have race condition, refetch
+          user_data = await this.fetch_twitch_user_info(twitch_token, session)
+        } else {
+          user_data = { name: cached_name, name_color: cached_name_color, user_id }
+        }
       }
     }
-    let display_name = await this.ctx.storage.get<string>(`twitch_user_name_${session}`)
-    console.log("Fetched Twitch user name from cache", display_name)
-    let user_id = await this.ctx.storage.get<string>(`twitch_user_id_${session}`)
-    if (display_name === undefined || user_id === undefined) {
-      const response = await fetch("https://api.twitch.tv/helix/users", {
+
+    return user_data
+  }
+
+  private get_player_session(request: Request) {
+    const cookies = request.headers.get("cookie") || ""
+    let session: string | undefined
+    cookies.split(";").forEach((cookie) => {
+      const [key, value] = cookie.trim().split("=")
+      if (key === "swarm_fm_player_session") {
+        session = value
+      }
+    })
+    return session
+  }
+
+  async twitch_user_auth(request: Request): Promise<Response> {
+    const session = this.get_player_session(request)
+    if (session === undefined) {
+      return new Response("Player session not found", { status: 400 })
+    }
+
+    const url = new URL(request.url)
+    const authorization_code = url.searchParams.get("code")
+    if (authorization_code === null) {
+      return new Response("Authorization code not found", { status: 400 })
+    }
+    try {
+      const response = await fetch("https://id.twitch.tv/oauth2/token", {
+        method: "POST",
         headers: {
-          "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
-          Authorization: `Bearer ${twitch_token.access_token}`,
+          "Content-Type": "application/x-www-form-urlencoded",
         },
+        body: new URLSearchParams({
+          client_id: env.PUBLIC_TWITCH_CLIENT_ID,
+          client_secret: env.TWITCH_CLIENT_SECRET,
+          code: authorization_code,
+          grant_type: "authorization_code",
+          redirect_uri: "https://player.sw.arm.fm/twitch_auth",
+        }),
       })
       if (!response.ok) {
-        console.error("ERROR: Twitch user name fetch failed:", await response.text())
-        throw new Error("Error fetching Twitch user name")
+        console.error("ERROR: Twitch user auth failed:", await response.text())
+        return new Response("Error authenticating with Twitch", { status: 500 })
       }
-      const json = await response.json<TwitchUserServer>()
-      display_name = json.data[0].display_name
-      user_id = json.data[0].id
-      await this.ctx.storage.put(`twitch_user_name_${session}`, display_name)
-      await this.ctx.storage.put(`twitch_user_id_${session}`, user_id)
-      console.log("Stored Twitch user name", display_name)
-      console.log("Stored Twitch user ID", user_id)
-      await this.ctx.storage.put(`twitch_user_cache_expires_${session}`, now + 3600)
-      console.log("Stored Twitch user cache expires", now + 3600)
-    }
-    let name_color = await this.ctx.storage.get<string>(`twitch_user_color_${display_name}`)
-    console.log("Fetched Twitch user color from cache", name_color)
-    if (name_color === undefined) {
-      const response = await fetch(`https://api.twitch.tv/helix/chat/color?user_id=${user_id}`, {
-        headers: {
-          "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
-          Authorization: `Bearer ${twitch_token.access_token}`,
-        },
-      })
-      if (!response.ok) {
-        console.error("ERROR: Twitch user color fetch failed:", await response.text())
-        throw new Error("Error fetching Twitch user color")
+      const json = await response.json<TwitchUserTokenServer>()
+      const twitch_token: TwitchUserToken = {
+        access_token: json.access_token,
+        expires_at: Date.now() / 1000 + json.expires_in,
+        refresh_token: json.refresh_token,
       }
-      const color_json = await response.json<TwitchUserColorServer>()
-      name_color = color_json.data[0].color
-      console.log("Stored Twitch user color", name_color)
-      await this.ctx.storage.put(`twitch_user_color_${display_name}`, name_color)
+      await this.ctx.storage.put(`twitch_user_token_${session}`, twitch_token)
+      return Response.redirect(url.origin, 303)
+    } catch (e) {
+      console.error(e)
+      return new Response("Error authenticating with Twitch", { status: 500 })
     }
-    return display_name
   }
 
   async twitch_session_check(session: string): Promise<{ name: string; name_color: string; user_id: string } | null> {
@@ -876,10 +1027,7 @@ export class DO extends DurableObject<Env> {
         throw e
       }
     }
-    const name = await this.twitch_get_user_name(twitch_token, session)
-    const name_color = (await this.ctx.storage.get<string>(`twitch_user_color_${name}`)) || ""
-    const user_id = await this.ctx.storage.get<string>(`twitch_user_id_${session}`)
-    return { name, name_color, user_id: user_id || "" }
+    return await this.twitch_get_user_info(twitch_token, session)
   }
 
   private async get_twitch_emotes(twitch_token: TwitchToken, channel_id: number, channel_name: string): Promise<TwitchEmotes> {
@@ -1049,13 +1197,7 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
     return emote_sets.data
   }
 
-  async flush_emote_cache(): Promise<Response> {
-    await this.ctx.storage.delete("twitch_emotes")
-    await this.ctx.storage.delete("seventv_emotes")
-    return new Response("OK")
-  }
-
-  async session_debug(request: Request): Promise<Response> {
+  private async ensure_admin(request: Request, _allow_dev: boolean = true): Promise<boolean> {
     const cookie_header = request.headers.get("cookie")
     if (cookie_header) {
       const cookies = cookie_header.split(";")
@@ -1064,10 +1206,27 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
         if (key === "swarm_fm_player_session") {
           const session = await this.twitch_session_check(value)
           if (!(session && this.admins.includes(session.name))) {
-            return new Response("Unauthorized", { status: 401 })
+            return false
           }
         }
       }
+    }
+    return true
+  }
+
+  async flush_emote_cache(request: Request): Promise<Response> {
+    if (!(await this.ensure_admin(request))) {
+      return new Response("Unauthorized", { status: 401 })
+    }
+
+    await this.ctx.storage.delete("twitch_emotes")
+    await this.ctx.storage.delete("seventv_emotes")
+    return new Response("OK")
+  }
+
+  async session_debug(request: Request): Promise<Response> {
+    if (!(await this.ensure_admin(request))) {
+      return new Response("Unauthorized", { status: 401 })
     }
 
     const ws_connections = this.ctx.getWebSockets()
@@ -1137,7 +1296,7 @@ export default {
       }
       return stub.fetch(request)
     } else if (url.pathname === "/flush_emote_cache") {
-      return stub.flush_emote_cache()
+      return stub.flush_emote_cache(request)
     } else if (url.pathname === "/session_debug") {
       return stub.session_debug(request)
     } else if (url.pathname.startsWith("/7tv/")) {
