@@ -2,7 +2,6 @@
   import { env } from "$env/dynamic/public"
   import { browser } from "$app/environment"
   import twitch_logo from "$lib/assets/glitch_flat_black-ops.svg"
-  import users_icon from "$lib/assets/fa-users.svg"
   import { onMount } from "svelte"
   import type { ChatMessage, WSMessageType } from "../worker"
   import ChatMessageRow from "$lib/components/ChatMessageRow.svelte"
@@ -14,6 +13,9 @@
   import type QualityLevelList from "videojs-contrib-quality-levels/dist/types/quality-level-list"
   import type QualityLevel from "videojs-contrib-quality-levels/dist/types/quality-level"
   import PlayerControlMenu from "$lib/components/PlayerControlMenu.svelte"
+  import ChatConnectionCount from "$lib/components/ChatConnectionCount.svelte"
+  import EmotePanel from "$lib/components/EmotePanel.svelte"
+  import { lower_cmp } from "$lib/utils"
 
   let { data } = $props()
   let session = $state(data.session)
@@ -29,7 +31,7 @@
   let chat_connected = $state(false)
   let chat_reconnecting = $state(false)
   let chat_authenticated = $state(false)
-  let chat_session_count = $state(0)
+  let chat_session_counts = $state({ session: 0, logged_in: 0, unique_logged_in: 0 })
   let chat_session_count_task_id: NodeJS.Timeout | undefined
 
   let chat_should_scroll_to_bottom = $state(true)
@@ -109,10 +111,12 @@
 
   let chat_ws: WebSocket | undefined
 
-  let chat_messages: (ChatMessage | string)[] = $state([])
+  let chat_messages: (ChatMessage | { id: string; type: "error" | "notification"; message: string })[] = $state([])
   let chat_messages_container: HTMLDivElement
 
   let chat_reconnection_timeout = $state(0)
+
+  let online_users: string[] = $state([])
 
   async function reconnect_chat() {
     if (chat_reconnection_timeout === 0) {
@@ -136,22 +140,23 @@
     chat_ws = new WebSocket(`wss://player.sw.arm.fm/chat`)
     chat_ws.onopen = async () => {
       chat_connected = true
+      add_non_chat_message("notification", "connected to chat server")
       if (twitch_logged_in && session) {
         await send_chat_message({ type: "authenticate", session })
-        chat_authenticated = true
       }
+      await send_chat_message({ type: "user_list" })
       await send_chat_message({ type: "history_request" })
       if (chat_session_count_task_id) {
         clearInterval(chat_session_count_task_id)
       }
-      await send_chat_message({ type: "get_connection_count" })
+      await send_chat_message({ type: "get_connection_counts" })
       chat_session_count_task_id = setInterval(async () => {
-        await send_chat_message({ type: "get_connection_count" })
+        await send_chat_message({ type: "get_connection_counts" })
       }, 30000)
     }
     chat_ws.onclose = (e: CloseEvent) => {
       console.log("chat disconnected")
-      chat_messages.push("disconnected from chat server")
+      add_non_chat_message("error", "disconnected from chat server")
       chat_connected = false
       if (chat_session_count_task_id) {
         clearInterval(chat_session_count_task_id)
@@ -163,7 +168,7 @@
     }
     chat_ws.onerror = (e) => {
       console.log("chat error", e)
-      chat_messages.push(`disconnected from chat server with error: ${e}`)
+      add_non_chat_message("error", `disconnected from chat server with error: ${e}`)
       chat_connected = false
     }
     chat_ws.onmessage = (e) => {
@@ -179,33 +184,53 @@
 
   async function handle_chat_message(message: WSMessageType) {
     switch (message.type) {
-      case "message_history":
-        chat_messages = message.messages
+      case "auth_success":
+        chat_authenticated = true
+        add_non_chat_message("notification", `Authenticated as ${message.name}`)
         break
-      case "new_message":
-        chat_messages.push(message.message)
-        if (chat_messages.length > 500) {
-          chat_messages = chat_messages.slice(-500)
+      case "message_history": {
+        const existing_ids = new Set(chat_messages.map((m) => m.id))
+        for (const m of message.messages) {
+          if (!existing_ids.has(m.id)) {
+            chat_messages.push(m)
+          }
         }
         break
+      }
+      case "new_message":
+        chat_messages.push(message.message)
+        if (chat_messages.length > 1000) {
+          chat_messages = chat_messages.slice(-1000)
+        }
+        break
+      case "user_list":
+        online_users = message.users!
+        break
       case "user_join":
-        // console.log("user joined:", message.name)
+        online_users.push(message.name)
         break
-      case "user_leave":
-        // console.log("user left:", message.name)
+      case "user_leave": {
+        const index = online_users.indexOf(message.name)
+        if (index !== -1) {
+          online_users.splice(index, 1)
+        }
         break
+      }
       case "user_timed_out":
-        chat_messages.push(`${message.name} has been timed out for ${message.duration} seconds`)
+        add_non_chat_message("notification", `${message.name} has been timed out for ${message.duration} seconds`)
         break
       case "user_banned":
-        chat_messages.push(`${message.name} has been banned`)
+        add_non_chat_message("notification", `${message.name} has been banned`)
         break
-      case "connection_count":
-        chat_session_count = message.count
+      case "connection_counts":
+        chat_session_counts = message.data
         break
       case "error":
         console.log("chat error:", message.message)
-        chat_messages.push(message.message)
+        add_non_chat_message("error", message.message)
+        break
+      case "notification":
+        add_non_chat_message("notification", message.message)
         break
       case "message_deleted":
         message_deleted(message.id)
@@ -213,98 +238,98 @@
     }
   }
 
+  function add_non_chat_message(type: "error" | "notification", message: string) {
+    chat_messages.push({ id: window.crypto.randomUUID(), type, message })
+  }
+
   async function handle_chat_keydown(e: KeyboardEvent) {
     const input = chat_input_element!.innerText
     if (e.key === "Enter") {
       e.preventDefault()
       if (input.trim() === "") return
-      await send_chat_message({ type: "send_message", message: input })
+      await send_chat_message({ type: "send_message", message: input.trim() })
       chat_input_element!.innerText = ""
     } else if (e.key === "Tab") {
       e.preventDefault()
-      if (input.endsWith("@")) {
-        // autocomplete users
-      } else {
-        autocomplete_emote(input)
-      }
+      autocomplete(input)
     } else {
-      emote_partial = ""
-      emote_candidates = []
-      emote_current_index = 0
-      emote_first_tab = true
+      autocomplete_partial = ""
+      autocomplete_candidates = []
+      autocomplete_current_index = 0
+      autocomplete_first_tab = true
     }
   }
 
-  let emote_partial = ""
-  let emote_candidates: string[] = []
-  let emote_current_index = 0
-  let emote_first_tab = true
+  let autocomplete_partial = ""
+  let autocomplete_candidates: string[] = []
+  let autocomplete_current_index = 0
+  let autocomplete_first_tab = true
 
-  function autocomplete_emote(input: string) {
+  function autocomplete(input: string) {
     if (input === "") return
     const current_selection = window.getSelection()!
     const current_range = current_selection.getRangeAt(0)
     console.log("current selection", current_selection)
     console.log("current range", current_range)
-    if (emote_partial === "") {
+    if (autocomplete_partial === "") {
       // get the word just before the cursor
       const input_before_cursor = input.slice(0, current_range.startOffset)
       const words = input_before_cursor.split(" ")
-      emote_partial = words[words.length - 1].toLowerCase()
-      if (emote_partial === "") return
-      emote_candidates =
-        seventv_emotes
-          ?.keys()
-          .filter((emote) => emote.toLowerCase().startsWith(emote_partial))
-          .toArray() ?? []
-      emote_candidates = emote_candidates.concat(
-        twitch_emotes
-          ?.keys()
-          .filter((emote) => emote.toLowerCase().startsWith(emote_partial))
-          .toArray() ?? [],
-      )
-      emote_candidates.sort((a, b) => {
-        const a_lower = a.toLowerCase()
-        const b_lower = b.toLowerCase()
-        if (a_lower === b_lower) return 0
-        if (a_lower < b_lower) return -1
-        return 1
-      })
-    }
-    console.log("emote partial", emote_partial)
-    console.log("emote candidates", emote_candidates)
-    if (emote_candidates.length === 0) return
-    console.log("emote current index", emote_current_index)
-    const input_cursor = current_range.startOffset
-    let backtrack_length = emote_partial.length
-    if (!emote_first_tab) {
-      let previous_index = emote_current_index - 1
-      if (emote_current_index === 0) {
-        previous_index = emote_candidates.length - 1
+      autocomplete_partial = words[words.length - 1].toLowerCase()
+      if (autocomplete_partial === "") return
+      if (autocomplete_partial.startsWith("@")) {
+        autocomplete_partial = autocomplete_partial.slice(1)
+        if (autocomplete_partial === "") return
+        autocomplete_candidates = online_users.filter((user) => user.toLowerCase().startsWith(autocomplete_partial))
+      } else {
+        autocomplete_candidates =
+          seventv_emotes
+            ?.keys()
+            .filter((emote) => emote.toLowerCase().startsWith(autocomplete_partial))
+            .toArray() ?? []
+        autocomplete_candidates = autocomplete_candidates.concat(
+          twitch_emotes
+            ?.keys()
+            .filter((emote) => emote.toLowerCase().startsWith(autocomplete_partial))
+            .toArray() ?? [],
+        )
       }
-      const previous_emote = emote_candidates[previous_index]
-      console.log("previous emote", previous_emote)
-      backtrack_length = previous_emote.length
+      autocomplete_candidates.sort(lower_cmp)
+    }
+    console.log("autocomplete partial", autocomplete_partial)
+    console.log("autocomplete candidates", autocomplete_candidates)
+    if (autocomplete_candidates.length === 0) return
+    console.log("autocomplete current index", autocomplete_current_index)
+    const input_cursor = current_range.startOffset
+    let backtrack_length = autocomplete_partial.length
+    if (!autocomplete_first_tab) {
+      let previous_index = autocomplete_current_index - 1
+      if (autocomplete_current_index === 0) {
+        previous_index = autocomplete_candidates.length - 1
+      }
+      const previous_autocomplete = autocomplete_candidates[previous_index]
+      console.log("previous autocomplete", previous_autocomplete)
+      backtrack_length = previous_autocomplete.length
     }
     console.log("backtrack length", backtrack_length)
-    emote_first_tab = false
+    autocomplete_first_tab = false
     const input_before_cursor = input.slice(0, input_cursor - backtrack_length)
     console.log("input before cursor", input_before_cursor)
     const input_after_cursor = input.slice(input_cursor)
     console.log("input after cursor", input_after_cursor)
-    const emote_next_candidate = emote_candidates[emote_current_index]
-    console.log("emote next candidate", emote_next_candidate)
-    chat_input_element!.innerText = input_before_cursor + emote_next_candidate + input_after_cursor
+    const autocomplete_next_candidate = autocomplete_candidates[autocomplete_current_index]
+    console.log("autocomplete next candidate", autocomplete_next_candidate)
+    chat_input_element!.innerText = input_before_cursor + autocomplete_next_candidate + input_after_cursor
     console.log("chat input", chat_input_element!.innerText)
     const range = document.createRange()
-    range.setStart(chat_input_element!.childNodes[0], input_before_cursor.length + emote_next_candidate.length)
-    console.log("range start", input_before_cursor.length + emote_next_candidate.length)
+    range.setStart(chat_input_element!.childNodes[0], input_before_cursor.length + autocomplete_next_candidate.length)
+    console.log("range start", input_before_cursor.length + autocomplete_next_candidate.length)
     range.collapse(true)
     const selection = window.getSelection()
     selection!.removeAllRanges()
     selection!.addRange(range)
-    emote_current_index = (emote_current_index + 1) % emote_candidates.length
-    console.log("emote next index", emote_current_index)
+    autocomplete_current_index = (autocomplete_current_index + 1) % autocomplete_candidates.length
+    console.log("autocomplete next index", autocomplete_current_index)
   }
 
   async function handle_chat_input() {
@@ -361,7 +386,7 @@
 
   let stream_types = ["HLS", "Low L-word HLS"]
   let stream_type = $state("HLS")
-  let stream_qualities = ["Auto", "1080", "720", "480", "360", "240"]
+  let stream_qualities = ["Auto", "1080", "720", "480", "360", "240", "Audio only"]
   let stream_quality = $state("Auto")
 
   let live_latency = $state(0)
@@ -388,6 +413,7 @@
     }
 
     console.log("videojs init")
+    const is_apple_mobile = videojs.browser.IS_IPHONE || videojs.browser.IS_IPAD
     player = videojs(node, {
       autoplay: true,
       controls: true,
@@ -398,13 +424,20 @@
         trackingThreshold: 0,
         liveTolerance: 5,
       },
+      html5: {
+        vhs: {
+          overrideNative: !is_apple_mobile,
+        },
+        nativeAudioTracks: is_apple_mobile,
+        nativeVideoTracks: is_apple_mobile,
+      },
     })
     change_stream_type()
 
     // @ts-expect-error unknown
     let quality_levels: QualityLevelList = (player as unknown).qualityLevels()
-    quality_levels.on("addqualitylevel", (e: {qualityLevel: QualityLevel}) => {
-      if (stream_quality === "Auto") {
+    quality_levels.on("addqualitylevel", (e: { qualityLevel: QualityLevel }) => {
+      if (stream_quality === "Auto" || stream_quality === "Audio only") {
         e.qualityLevel.enabled_(true)
         return
       }
@@ -419,7 +452,6 @@
       current_quality = quality_levels.selectedIndex_
     })
 
-
     const volume = window.localStorage.getItem("player_volume") ?? "0.5"
     player.volume(parseFloat(volume))
     player.on("volumechange", () => {
@@ -431,25 +463,42 @@
       const current_time = player!.currentTime() as number
       const live_current_time = live_tracker.liveCurrentTime()
       total_duration = live_current_time
-      live_latency = live_current_time - current_time
+      const latency_offset = stream_type === "Low L-word HLS" ? 0 : 10
+      live_latency = live_current_time - current_time + latency_offset
       const buffer_end = player!.bufferedEnd()
       buffer_duration = buffer_end - current_time
     }, 250)
   }
 
-  function change_stream_type() {
+  async function change_stream_type() {
     if (player === undefined) {
       return
     }
     console.log("change stream type", stream_type)
     window.localStorage.setItem("player_stream_type", stream_type)
+    let source: string
     if (stream_type === "Low L-word HLS") {
-      player.src(stream_manifest_url_base + ".m3u8?protocol=llhls")
+      const manifest_link = stream_manifest_url_base + ".m3u8?protocol=llhls"
+      if (stream_quality === "Audio only") {
+        source = (await fetch_audio_manifest(manifest_link)) ?? manifest_link
+      } else {
+        source = manifest_link
+      }
     } else if (stream_type === "HLS") {
-      player.src(stream_manifest_url_base + ".m3u8")
+      const manifest_link = stream_manifest_url_base + ".m3u8"
+      if (stream_quality === "Audio only") {
+        source = (await fetch_audio_manifest(manifest_link)) ?? manifest_link
+      } else {
+        source = manifest_link
+      }
     } else if (stream_type === "DASH") {
       // player is broken on cf stream dash
-      player.src(stream_manifest_url_base + ".mpd")
+      source = stream_manifest_url_base + ".mpd"
+    } else {
+      return
+    }
+    if (player.src(undefined) !== source) {
+      player.src(source)
     }
   }
 
@@ -458,9 +507,16 @@
       return
     }
     console.log("change stream quality", stream_quality)
-    window.localStorage.setItem("player_stream_quality", stream_quality)
     // @ts-expect-error unknown
     let quality_levels: QualityLevelList = (player as unknown).qualityLevels()
+    window.localStorage.setItem("player_stream_quality", stream_quality)
+    change_stream_type()
+    if (stream_quality === "Audio only") {
+      quality_levels.levels_.forEach((level) => {
+        level.enabled_(true)
+      })
+      return
+    }
     for (let i = 0; i < quality_levels.levels_.length; i++) {
       if (stream_quality === "Auto") {
         quality_levels.levels_[i].enabled_(true)
@@ -470,6 +526,34 @@
         quality_levels.levels_[i].enabled_(false)
       }
     }
+  }
+
+  async function fetch_audio_manifest(main_manifest_link: string): Promise<string | undefined> {
+    const response = await fetch(main_manifest_link)
+    const manifest = await response.text()
+    for (const line of manifest.split("\n")) {
+      if (line.startsWith("#EXT-X-MEDIA:")) {
+        const url = line.match(/URI="([^"]+)"/)?.[1]
+        if (url !== undefined) {
+          let manifest_path = main_manifest_link.split("/").slice(0, -1).join("/")
+          console.log(manifest_path + "/" + url)
+
+          return manifest_path + "/" + url
+        }
+      }
+    }
+  }
+
+  function insert_emote(emote: string) {
+    const input = chat_input_element!.textContent ?? ""
+    let insert = ""
+    if (input !== "" && !input.endsWith(" ")) {
+      insert = ` ${emote} `
+    } else {
+      insert = `${emote} `
+    }
+    chat_input_element!.textContent = input + insert
+    handle_chat_input()
   }
 
   if (browser) {
@@ -603,18 +687,6 @@
     flex: 1 1 auto;
   }
 
-  #chat-session-count {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-
-    img {
-      filter: invert(1);
-      height: 1rem;
-      width: 1rem;
-    }
-  }
-
   #chat-messages {
     position: relative;
     flex: 1 1 auto;
@@ -654,6 +726,7 @@
       padding: 0.25rem;
       font-size: 14px;
       overflow-wrap: anywhere;
+      white-space: pre-wrap;
 
       &:focus {
         outline: none;
@@ -673,6 +746,8 @@
     margin-bottom: 0.25rem;
     height: 100%;
     display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
     align-items: end;
   }
 
@@ -689,7 +764,7 @@
     background-color: #ffffffc0;
   }
 
-  [contenteditable="plaintext-only"]:empty:before {
+  #chat-input-field:empty:before {
     content: attr(data-placeholder);
     color: grey;
   }
@@ -760,21 +835,17 @@
             &nbsp;(Auto-reconnect in {chat_reconnection_timeout}s)
           {/if}
         </span>
-        {#if chat_session_count > 0}
-          <div id="chat-session-count">
-            <img src={users_icon} alt="Chat users" />
-            {chat_session_count}
-          </div>
+        {#if chat_session_counts.session >= 0}
+          <ChatConnectionCount {chat_session_counts} />
         {/if}
       </div>
       <div id="chat-messages" bind:this={chat_messages_container} onscroll={on_chat_scroll}>
-        {#each chat_messages as message (message)}
+        {#each chat_messages as message (message.id)}
           <div use:scroll_to_bottom>
-            {#if typeof message === "string"}
-              <em style="color: #aaa">{message}</em>
+            {#if "type" in message}
+              <em style="color: #aaa">{message.message}</em>
             {:else}
-              <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} {is_admin} {delete_message}
-                              logged_in_user={name} />
+              <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} {is_admin} {delete_message} logged_in_user={name} />
             {/if}
           </div>
         {/each}
@@ -793,6 +864,7 @@
             oninput={handle_chat_input}
           ></span>
           <div id="chat-input-counter">
+            <EmotePanel {twitch_emotes} {seventv_emotes} {insert_emote} />
             {#if chat_input_length > 300}
               {500 - chat_input_length}
             {/if}

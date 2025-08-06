@@ -1,8 +1,6 @@
 <script lang="ts">
   import type { SevenTVEmotes, TwitchEmotes } from "../../worker"
   import { computePosition, flip, shift, offset } from "@floating-ui/dom"
-  import type { Action } from "svelte/action"
-  import type { Attachment } from "svelte/attachments"
 
   type ChatMessageEmoteProps = {
     name: string
@@ -29,12 +27,13 @@
     const is_safari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
     const seventv_format = is_safari ? "webp" : "avif"
     if (seventv_emotes) {
-      let emote_data = seventv_emotes.get(name)
+      const emote_data = seventv_emotes.get(name)
       if (emote_data !== undefined) {
-        const url_1x = emote_data.url + "/1x." + seventv_format
-        const url_2x = emote_data.url + "/2x." + seventv_format
-        const url_3x = emote_data.url + "/3x." + seventv_format
-        const url_4x = emote_data.url + "/4x." + seventv_format
+        const url = emote_data.url.replace("//cdn.7tv.app", "/7tv")
+        const url_1x = url + "/1x." + seventv_format
+        const url_2x = url + "/2x." + seventv_format
+        const url_3x = url + "/3x." + seventv_format
+        const url_4x = url + "/4x." + seventv_format
         return { url_1x, url_2x, url_3x, url_4x, width: emote_data.width, set_name: emote_data.set_name, owner: emote_data.owner }
       }
     }
@@ -44,7 +43,15 @@
         // there should be no missing urls here
         const url_2x = emote_data.images.url_2x || ""
         const url_4x = emote_data.images.url_4x || ""
-        return { url_1x: url_2x, url_2x: url_4x, url_3x: url_4x, url_4x, width: 32, set_name: "vedal987 Twitch Emotes", owner: "" }
+        return {
+          url_1x: url_2x,
+          url_2x: url_4x,
+          url_3x: url_4x,
+          url_4x,
+          width: 32,
+          set_name: `${emote_data.channel} Twitch Emotes`,
+          owner: "",
+        }
       }
     }
     return { url_1x: "", url_2x: "", url_3x: "", url_4x: "", width: 0, set_name: "", owner: "" }
@@ -104,6 +111,10 @@
     }
   }
 
+  :global(.popup + .chat-message-emote) {
+    margin-left: 0;
+  }
+
   .popup {
     background-color: #000000c0;
     display: none;
@@ -140,12 +151,19 @@
 </style>
 
 {#snippet emote_snippet(url_1x: string, url_2x: string, url_3x: string, url_4x: string, name: string, width: number)}
-  <img class="emote" src={url_1x} srcset="{url_1x} 1x, {url_2x} 2x, {url_3x} 3x, {url_4x} 4x" alt={name} style="width: {width}px" />
+  <img
+    loading="lazy"
+    class="emote"
+    src={url_1x}
+    srcset="{url_1x} 1x, {url_2x} 2x, {url_3x} 3x, {url_4x} 4x"
+    alt={name}
+    style="width: {width}px"
+  />
 {/snippet}
 
 {#snippet emote_popup_snippet(url_4x: string, name: string, width: number, set_name: string, owner: string)}
   <div class="popup-emote-section">
-    <img class="popup-emote" src={url_4x} alt={name} style="width: {width * 4}px" />
+    <img loading="lazy" class="popup-emote" src={url_4x} alt={name} style="width: {width * 4}px" />
     <div class="popup-emote-name">{name}</div>
     <div class="popup-emote-set-name">{set_name}</div>
     {#if owner !== ""}
@@ -159,12 +177,11 @@
   {#each zw_emotes as zw_emote (zw_emote.name)}
     {@render emote_snippet(zw_emote.url_1x, zw_emote.url_2x, zw_emote.url_3x, zw_emote.url_4x, zw_emote.name, max_width)}
   {/each}
-</div>
-<div class="popup" bind:this={popup_element}>
-  {@render emote_popup_snippet(emote.url_4x, emote.name, max_width, emote.set_name, emote.owner)}
+</div><div class="popup" bind:this={popup_element}>
+  {@render emote_popup_snippet(emote.url_4x, emote.name, emote.width, emote.set_name, emote.owner)}
   <div class="popup-zw">
     {#each zw_emotes as zw_emote (zw_emote.name)}
-      {@render emote_popup_snippet(zw_emote.url_4x, zw_emote.name, max_width, zw_emote.set_name, zw_emote.owner)}
+      {@render emote_popup_snippet(zw_emote.url_4x, zw_emote.name, zw_emote.width, zw_emote.set_name, zw_emote.owner)}
     {/each}
   </div>
 </div>

@@ -110,11 +110,11 @@
       while (i + 1 < words.length) {
         const next_word = words[i + 1]
         const next_emote_type = is_emote(next_word)
-        if (next_emote_type === null || next_emote_type === EmoteType.NORMAL) {
-          break
-        } else {
+        if (next_emote_type === EmoteType.ZERO_WIDTH) {
           zero_widths.push(next_word)
           i++
+        } else {
+          break
         }
       }
       message_parts.push({ emote: word, zero_widths })
