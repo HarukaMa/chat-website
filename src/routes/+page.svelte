@@ -20,6 +20,7 @@
   let twitch_logged_in = $state(data.twitch_logged_in)
   let name = $state(data.name)
   let name_color = $state(data.name_color)
+  let user_id = $state(data.user_id)
   let twitch_emotes = $state(data.twitch_emotes)
   let seventv_emotes = $state(data.seventv_emotes)
   let admins = $state(data.admins)

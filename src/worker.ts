@@ -10,6 +10,7 @@ export type ChatMessage = {
   name_color: string
   message: string
   timestamp_ms: number
+  roles: string[] // Add roles to chat messages
 }
 
 export type WSMessageType =
@@ -22,6 +23,7 @@ export type WSMessageType =
   | { type: "user_join"; name: string }
   | { type: "user_leave"; name: string }
   | { type: "connection_count"; count: number }
+  | { type: "role_updated"; name: string; roles: string[] } // Add role update message
   // client -> server
   | { type: "authenticate"; session: string }
   | { type: "send_message"; message: string }
@@ -32,6 +34,8 @@ export type WSMessageType =
   | { type: "user_list"; users?: string[] }
   | { type: "history_request" }
   | { type: "get_connection_count" }
+  | { type: "assign_role"; name: string; role: string } // Add role assignment
+  | { type: "remove_role"; name: string; role: string } // Add role removal
   // error
   | { type: "error"; message: string }
 
@@ -167,15 +171,9 @@ export type SevenTVEmotesCache = {
 export class DO extends DurableObject<Env> {
   sessions: Map<WebSocket, Session>
   admins: string[]
+  devs: string[]
   commands: Map<string, (msg: WSMessageType, session: Session, ws: WebSocket) => Promise<void>>
 
-  /**
-   * The constructor is invoked once upon creation of the Durable Object, i.e. the first call to
-   *    `DurableObjectStub::get` for a given identifier (no-op constructors can be omitted)
-   *
-   * @param ctx - The interface for interacting with Durable Object state
-   * @param env - The interface to reference bindings declared in wrangler.jsonc
-   */
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
     this.sessions = new Map()
@@ -187,11 +185,14 @@ export class DO extends DurableObject<Env> {
 
     // hardcoded admin list for now...
     this.admins = ["haruka_ff", "boop_dot", "key0__0"]
+    this.devs = ["haruka_ff", "KTrain5369"]
 
     this.commands = new Map([
       ["/timeout", this.command_timeout_user.bind(this)],
       ["/ban", this.command_ban_user.bind(this)],
       ["/unban", this.command_unban_user.bind(this)],
+      ["/role", this.command_assign_role.bind(this)], // Add role assignment command
+      ["/removerole", this.command_remove_role.bind(this)], // Add role removal command
     ])
 
     this.init_database()
@@ -312,6 +313,16 @@ export class DO extends DurableObject<Env> {
         ws.send(JSON.stringify({ type: "connection_count", count: this.ctx.getWebSockets().length }))
         break
 
+      case "assign_role": {
+        await this.ws_assign_role(msg, session, ws)
+        break
+      }
+
+      case "remove_role": {
+        await this.ws_remove_role(msg, session, ws)
+        break
+      }
+
       default:
         ws.close(1007, "invalid message type")
         return
@@ -414,10 +425,11 @@ export class DO extends DurableObject<Env> {
     if (color === undefined) {
       color = ""
     }
+    const roles = await this.get_user_roles(session.name) // Get user roles
     await this.ctx.storage.put(`last_message_time_${session.name}`, now)
     this.broadcast({
       type: "new_message",
-      message: { id, name: session.name, name_color: color, message: msg.message, timestamp_ms: now },
+      message: { id, name: session.name, name_color: color, message: msg.message, timestamp_ms: now, roles },
     })
   }
 
@@ -436,6 +448,7 @@ export class DO extends DurableObject<Env> {
     )
     const history_messages: ChatMessage[] = []
     const name_color_cache = new Map<string, string>()
+    const roles_cache = new Map<string, string[]>()
     for (const db_message of messages) {
       const { id, name, message, timestamp_ms } = db_message
       let name_color = name_color_cache.get(name)
@@ -446,7 +459,12 @@ export class DO extends DurableObject<Env> {
         }
         name_color_cache.set(name, name_color)
       }
-      history_messages.push({ id, name, name_color, message, timestamp_ms })
+      let roles = roles_cache.get(name)
+      if (roles === undefined) {
+        roles = await this.get_user_roles(name)
+        roles_cache.set(name, roles)
+      }
+      history_messages.push({ id, name, name_color, message, timestamp_ms, roles })
     }
     ws.send(JSON.stringify({ type: "message_history", messages: history_messages.toReversed() }))
   }
@@ -587,6 +605,69 @@ export class DO extends DurableObject<Env> {
     ws.send(JSON.stringify({ type: "error", message: `User ${name} has been unbanned` }))
   }
 
+  async get_user_roles(username: string): Promise<string[]> {
+    const roles = await this.ctx.storage.get<string[]>(`user_roles_${username}`)
+    return roles || []
+  }
+
+  async ws_assign_role(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (msg.type !== "send_message") {
+      return
+    }
+    if (this.admins.indexOf(session.name) === -1) {
+      ws.close(1007, "unauthorized")
+      return
+    }
+  }
+
+  async command_assign_role(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (msg.type !== "send_message") {
+      return
+    }
+    if (this.admins.indexOf(session.name) === -1) {
+      ws.close(1007, "unauthorized")
+      return
+    }
+  }
+
+  async assign_role(username: string, role: string): Promise<void> {
+    const current_roles = await this.get_user_roles(username)
+    if (!current_roles.includes(role)) {
+      current_roles.push(role)
+      await this.ctx.storage.put(`user_roles_${username}`, current_roles)
+    }
+  }
+
+  async ws_remove_role(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (msg.type !== "send_message") {
+      return
+    }
+    if (this.admins.indexOf(session.name) === -1) {
+      ws.close(1007, "unauthorized")
+      return
+    }
+  }
+
+  async command_remove_role(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (msg.type !== "send_message") {
+      return
+    }
+    if (this.admins.indexOf(session.name) === -1) {
+      ws.close(1007, "unauthorized")
+      return
+    }
+  }
+
+  async remove_role(username: string, role: string): Promise<void> {
+    const current_roles = await this.get_user_roles(username)
+    const updated_roles = current_roles.filter(r => r !== role)
+    if (updated_roles.length > 0) {
+      await this.ctx.storage.put(`user_roles_${username}`, updated_roles)
+    } else {
+      await this.ctx.storage.delete(`user_roles_${username}`)
+    }
+  }
+
   async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
     const session = this.sessions.get(ws)
     if (session) {
@@ -662,14 +743,15 @@ export class DO extends DurableObject<Env> {
       console.log("Cache expired or not found")
       const cached_display_name = await this.ctx.storage.get<string>(`twitch_user_name_${session}`)
       await this.ctx.storage.delete(`twitch_user_name_${session}`)
+      await this.ctx.storage.delete(`twitch_user_id_${session}`)
       if (cached_display_name !== undefined) {
         await this.ctx.storage.delete(`twitch_user_color_${cached_display_name}`)
       }
     }
     let display_name = await this.ctx.storage.get<string>(`twitch_user_name_${session}`)
     console.log("Fetched Twitch user name from cache", display_name)
-    let user_id: string | undefined
-    if (display_name === undefined) {
+    let user_id = await this.ctx.storage.get<string>(`twitch_user_id_${session}`)
+    if (display_name === undefined || user_id === undefined) {
       const response = await fetch("https://api.twitch.tv/helix/users", {
         headers: {
           "Client-Id": env.PUBLIC_TWITCH_CLIENT_ID,
@@ -684,7 +766,9 @@ export class DO extends DurableObject<Env> {
       display_name = json.data[0].display_name
       user_id = json.data[0].id
       await this.ctx.storage.put(`twitch_user_name_${session}`, display_name)
+      await this.ctx.storage.put(`twitch_user_id_${session}`, user_id)
       console.log("Stored Twitch user name", display_name)
+      console.log("Stored Twitch user ID", user_id)
       await this.ctx.storage.put(`twitch_user_cache_expires_${session}`, now + 3600)
       console.log("Stored Twitch user cache expires", now + 3600)
     }
@@ -709,62 +793,7 @@ export class DO extends DurableObject<Env> {
     return display_name
   }
 
-  private get_player_session(request: Request) {
-    const cookies = request.headers.get("cookie") || ""
-    let session: string | undefined
-    cookies.split(";").forEach((cookie) => {
-      const [key, value] = cookie.trim().split("=")
-      if (key === "swarm_fm_player_session") {
-        session = value
-      }
-    })
-    return session
-  }
-
-  async twitch_user_auth(request: Request): Promise<Response> {
-    const session = this.get_player_session(request)
-    if (session === undefined) {
-      return new Response("Player session not found", { status: 400 })
-    }
-
-    const url = new URL(request.url)
-    const authorization_code = url.searchParams.get("code")
-    if (authorization_code === null) {
-      return new Response("Authorization code not found", { status: 400 })
-    }
-    try {
-      const response = await fetch("https://id.twitch.tv/oauth2/token", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          client_id: env.PUBLIC_TWITCH_CLIENT_ID,
-          client_secret: env.TWITCH_CLIENT_SECRET,
-          code: authorization_code,
-          grant_type: "authorization_code",
-          redirect_uri: "https://player.sw.arm.fm/twitch_auth",
-        }),
-      })
-      if (!response.ok) {
-        console.error("ERROR: Twitch user auth failed:", await response.text())
-        return new Response("Error authenticating with Twitch", { status: 500 })
-      }
-      const json = await response.json<TwitchUserTokenServer>()
-      const twitch_token: TwitchUserToken = {
-        access_token: json.access_token,
-        expires_at: Date.now() / 1000 + json.expires_in,
-        refresh_token: json.refresh_token,
-      }
-      await this.ctx.storage.put(`twitch_user_token_${session}`, twitch_token)
-      return Response.redirect(url.origin, 303)
-    } catch (e) {
-      console.error(e)
-      return new Response("Error authenticating with Twitch", { status: 500 })
-    }
-  }
-
-  async twitch_session_check(session: string): Promise<{ name: string; name_color: string } | null> {
+  async twitch_session_check(session: string): Promise<{ name: string; name_color: string; user_id: string } | null> {
     let twitch_token = await this.ctx.storage.get<TwitchUserToken>(`twitch_user_token_${session}`)
     if (twitch_token === undefined) {
       return null
@@ -780,7 +809,8 @@ export class DO extends DurableObject<Env> {
     }
     const name = await this.twitch_get_user_name(twitch_token, session)
     const name_color = (await this.ctx.storage.get<string>(`twitch_user_color_${name}`)) || ""
-    return { name, name_color }
+    const user_id = await this.ctx.storage.get<string>(`twitch_user_id_${session}`)
+    return { name, name_color, user_id: user_id || "" }
   }
 
   async twitch_emotes(): Promise<TwitchEmotes> {
