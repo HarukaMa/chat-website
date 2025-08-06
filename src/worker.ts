@@ -1109,8 +1109,19 @@ export default {
       return stub.flush_emote_cache()
     } else if (url.pathname === "/session_debug") {
       return stub.session_debug(request)
+    } else if (url.pathname.startsWith("/7tv/")) {
+      return seventv_cache_proxy(request)
     }
 
     return await sveltekit_worker.fetch(request, env, _ctx)
   },
 } satisfies ExportedHandler<Env>
+
+async function seventv_cache_proxy(request: Request): Promise<Response> {
+  const url = new URL(request.url)
+  const path = url.pathname.substring("/7tv/".length)
+  if (!(path.toLowerCase().endsWith(".avif") || path.toLowerCase().endsWith(".webp"))) {
+    return new Response("Unsupported image format", { status: 400 })
+  }
+  return await fetch(`https://cdn.7tv.app/${path}`)
+}

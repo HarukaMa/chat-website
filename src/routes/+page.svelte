@@ -278,6 +278,7 @@
       if (autocomplete_partial === "") return
       if (autocomplete_partial.startsWith("@")) {
         autocomplete_partial = autocomplete_partial.slice(1)
+        if (autocomplete_partial === "") return
         autocomplete_candidates = online_users.filter((user) => user.toLowerCase().startsWith(autocomplete_partial))
       } else {
         autocomplete_candidates =
