@@ -1018,13 +1018,7 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
     return emote_sets.data
   }
 
-  async flush_emote_cache(): Promise<Response> {
-    await this.ctx.storage.delete("twitch_emotes")
-    await this.ctx.storage.delete("seventv_emotes")
-    return new Response("OK")
-  }
-
-  async session_debug(request: Request): Promise<Response> {
+  private async ensure_admin(request: Request, _allow_dev: boolean = true): Promise<boolean> {
     const cookie_header = request.headers.get("cookie")
     if (cookie_header) {
       const cookies = cookie_header.split(";")
@@ -1032,11 +1026,28 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
         const [key, value] = cookie.trim().split("=")
         if (key === "swarm_fm_player_session") {
           const session = await this.twitch_session_check(value)
-          if (!(session && this.admins.includes(session.name))) {
-            return new Response("Unauthorized", { status: 401 })
+          if (session && this.admins.includes(session.name)) {
+            return true
           }
         }
       }
+    }
+    return false
+  }
+
+  async flush_emote_cache(request: Request): Promise<Response> {
+    if (!(await this.ensure_admin(request))) {
+      return new Response("Unauthorized", { status: 401 })
+    }
+
+    await this.ctx.storage.delete("twitch_emotes")
+    await this.ctx.storage.delete("seventv_emotes")
+    return new Response("OK")
+  }
+
+  async session_debug(request: Request): Promise<Response> {
+    if (!(await this.ensure_admin(request))) {
+      return new Response("Unauthorized", { status: 401 })
     }
 
     const ws_connections = this.ctx.getWebSockets()
