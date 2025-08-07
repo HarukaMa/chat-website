@@ -1212,13 +1212,13 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
         const [key, value] = cookie.trim().split("=")
         if (key === "swarm_fm_player_session") {
           const session = await this.twitch_session_check(value)
-          if (!(session && this.admins.includes(session.user_id))) {
-            return false
+          if (session && this.admins.includes(session.user_id)) {
+            return true
           }
         }
       }
     }
-    return true
+    return false
   }
 
   async flush_emote_cache(request: Request): Promise<Response> {
