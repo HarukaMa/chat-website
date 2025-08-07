@@ -1,4 +1,5 @@
 <script lang="ts">
+  import "modern-normalize/modern-normalize.css"
   import { env } from "$env/dynamic/public"
   import { browser } from "$app/environment"
   import twitch_logo from "$lib/assets/glitch_flat_black-ops.svg"
