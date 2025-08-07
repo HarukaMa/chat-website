@@ -7,16 +7,14 @@
 
   // Define badge configurations
   const badges: Record<string, { icon: string; color: string; title: string }> = {
-    moderator: { icon: "🛡️", color: "#00ad03", title: "Moderator" },
-    subscriber: { icon: "⭐", color: "#e91e63", title: "Subscriber" },
+    mod: { icon: "🛡️", color: "#00ad03", title: "Moderator" },
     vip: { icon: "💎", color: "#e91e63", title: "VIP" },
-    developer: { icon: "🔧", color: "#9146ff", title: "Developer" },
-    artist: { icon: "🎨", color: "#ff6b35", title: "Artist" },
-    streamer: { icon: "📺", color: "#ff0000", title: "Streamer" },
+    dev: { icon: "🔧", color: "#9146ff", title: "Developer" },
+    art: { icon: "🎨", color: "#ff6b35", title: "Artist" },
+    stream: { icon: "📺", color: "#ff0000", title: "Streamer" },
     bot: { icon: "🤖", color: "#808080", title: "Bot" }
   }
 
-  // Replace the $: reactive statement with $derived
   let badge = $derived(badges[role] || { icon: "🏷️", color: "#666666", title: role })
 </script>
 
