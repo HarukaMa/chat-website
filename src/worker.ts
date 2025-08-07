@@ -811,6 +811,36 @@ export class DO extends DurableObject<Env> {
     this.broadcast({ type: "role_updated", name: targetName, roles: await this.get_user_roles(targetUserId) })
   }
 
+  private async ws_assign_role(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (msg.type !== "assign_role") {
+      return
+    }
+    if (!session.authenticated) {
+      ws.close(1007, "unauthenticated")
+      return
+    }
+    if (!(await this.hasRole(session.user_id, "mod"))) {
+      ws.close(1007, "unauthorized")
+      return
+    }
+
+    const validRoles = ["mod", "vip", "dev", "art", "stream", "bot"]
+    if (!validRoles.includes(msg.role)) {
+      ws.send(JSON.stringify({ type: "error", message: `Invalid role. Valid roles: ${validRoles.join(", ")}` }))
+      return
+    }
+
+    const targetUserId = await this.ctx.storage.get<string>(`twitch_user_id_from_name_${msg.name}`)
+    if (!targetUserId) {
+      ws.send(JSON.stringify({ type: "error", message: "User not found" }))
+      return
+    }
+
+    await this.assign_role(targetUserId, msg.role)
+    ws.send(JSON.stringify({ type: "notification", message: `Assigned role ${msg.role} to ${msg.name}` }))
+    this.broadcast({ type: "role_updated", name: msg.name, roles: await this.get_user_roles(targetUserId) })
+  }
+
   async assign_role(userId: string, role: string): Promise<void> {
     const usersWithRole = await this.getUsersWithRole(role)
     if (!usersWithRole.includes(userId)) {
@@ -846,6 +876,30 @@ export class DO extends DurableObject<Env> {
     await this.remove_role(targetUserId, role)
     ws.send(JSON.stringify({ type: "notification", message: `Removed role ${role} from ${targetName}` }))
     this.broadcast({ type: "role_updated", name: targetName, roles: await this.get_user_roles(targetUserId) })
+  }
+
+  private async ws_remove_role(msg: WSMessageType, session: Session, ws: WebSocket) {
+    if (msg.type !== "remove_role") {
+      return
+    }
+    if (!session.authenticated) {
+      ws.close(1007, "unauthenticated")
+      return
+    }
+    if (!(await this.hasRole(session.user_id, "mod"))) {
+      ws.close(1007, "unauthorized")
+      return
+    }
+
+    const targetUserId = await this.ctx.storage.get<string>(`twitch_user_id_from_name_${msg.name}`)
+    if (!targetUserId) {
+      ws.send(JSON.stringify({ type: "error", message: "User not found" }))
+      return
+    }
+
+    await this.remove_role(targetUserId, msg.role)
+    ws.send(JSON.stringify({ type: "notification", message: `Removed role ${msg.role} from ${msg.name}` }))
+    this.broadcast({ type: "role_updated", name: msg.name, roles: await this.get_user_roles(targetUserId) })
   }
 
   async remove_role(userId: string, role: string): Promise<void> {
@@ -1340,60 +1394,6 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
        WHERE timestamp_ms < ${Date.now() - 86400 * 1000 * 3}`,
     )
     this.ctx.storage.setAlarm(Date.now() + 3600 * 1000).catch((e) => console.error(e))
-  }
-
-  private async ws_assign_role(msg: WSMessageType, session: Session, ws: WebSocket) {
-    if (msg.type !== "assign_role") {
-      return
-    }
-    if (!session.authenticated) {
-      ws.close(1007, "unauthenticated")
-      return
-    }
-    if (!(await this.hasRole(session.user_id, "mod"))) {
-      ws.close(1007, "unauthorized")
-      return
-    }
-
-    const validRoles = ["mod", "vip", "dev", "art", "stream", "bot"]
-    if (!validRoles.includes(msg.role)) {
-      ws.send(JSON.stringify({ type: "error", message: `Invalid role. Valid roles: ${validRoles.join(", ")}` }))
-      return
-    }
-
-    const targetUserId = await this.ctx.storage.get<string>(`twitch_user_id_from_name_${msg.name}`)
-    if (!targetUserId) {
-      ws.send(JSON.stringify({ type: "error", message: "User not found" }))
-      return
-    }
-
-    await this.assign_role(targetUserId, msg.role)
-    ws.send(JSON.stringify({ type: "notification", message: `Assigned role ${msg.role} to ${msg.name}` }))
-    this.broadcast({ type: "role_updated", name: msg.name, roles: await this.get_user_roles(targetUserId) })
-  }
-
-  private async ws_remove_role(msg: WSMessageType, session: Session, ws: WebSocket) {
-    if (msg.type !== "remove_role") {
-      return
-    }
-    if (!session.authenticated) {
-      ws.close(1007, "unauthenticated")
-      return
-    }
-    if (!(await this.hasRole(session.user_id, "mod"))) {
-      ws.close(1007, "unauthorized")
-      return
-    }
-
-    const targetUserId = await this.ctx.storage.get<string>(`twitch_user_id_from_name_${msg.name}`)
-    if (!targetUserId) {
-      ws.send(JSON.stringify({ type: "error", message: "User not found" }))
-      return
-    }
-
-    await this.remove_role(targetUserId, msg.role)
-    ws.send(JSON.stringify({ type: "notification", message: `Removed role ${msg.role} from ${msg.name}` }))
-    this.broadcast({ type: "role_updated", name: msg.name, roles: await this.get_user_roles(targetUserId) })
   }
 }
 
