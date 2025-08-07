@@ -42,22 +42,24 @@
       ? env.PUBLIC_SESSION_DOMAIN.substring(8)
       : env.PUBLIC_SESSION_DOMAIN
 
-  if (!session && browser) {
-    const cookies = document.cookie
-    let has_session = false
-    for (const cookie of cookies.split(";")) {
-      const [key, value] = cookie.trim().split("=")
-      if (key === "swarm_fm_player_session") {
-        has_session = true
-        session = value
+  onMount(() => {
+    if (!session && browser) {
+      const cookies = document.cookie
+      let has_session = false
+      for (const cookie of cookies.split(";")) {
+        const [key, value] = cookie.trim().split("=")
+        if (key === "swarm_fm_player_session") {
+          has_session = true
+          session = value
+        }
+      }
+      if (!has_session) {
+        const uuid = self.crypto.randomUUID()
+        document.cookie = `swarm_fm_player_session=${uuid}; domain=${sessionDomainSubstringed}; expires=Fri, 31 Dec 9999 23:59:59 GMT; secure; samesite=lax`
+        session = uuid
       }
     }
-    if (!has_session) {
-      const uuid = self.crypto.randomUUID()
-      document.cookie = `swarm_fm_player_session=${uuid}; domain=${sessionDomainSubstringed}; expires=Fri, 31 Dec 9999 23:59:59 GMT; secure; samesite=lax`
-      session = uuid
-    }
-  }
+  })
 
   const reconstructedDomain =
     !env.PUBLIC_SESSION_DOMAIN?.startsWith("http://") || !env.PUBLIC_SESSION_DOMAIN?.startsWith("https://")
