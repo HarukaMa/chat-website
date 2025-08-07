@@ -265,7 +265,7 @@ export class DO extends DurableObject<Env> {
     const artistRoles = await this.ctx.storage.get<string[]>("role_art")
     if (!artistRoles) {
       await this.ctx.storage.put("role_art", [
-        "752652273" // key0__0
+        "752652273", // key0__0
       ])
     }
 
@@ -287,7 +287,7 @@ export class DO extends DurableObject<Env> {
 
   // Helper method to get all users with a specific role
   private async getUsersWithRole(role: string): Promise<string[]> {
-    return await this.ctx.storage.get<string[]>(`role_${role}`) || []
+    return (await this.ctx.storage.get<string[]>(`role_${role}`)) || []
   }
 
   // Updated method to get user roles
@@ -336,6 +336,27 @@ export class DO extends DurableObject<Env> {
       this.ctx.storage.sql.exec(`ALTER TABLE messages ADD COLUMN user_id TEXT NOT NULL DEFAULT ""`)
       this.ctx.storage.sql.exec(`INSERT INTO migrations (id) VALUES (1)`)
     }
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    const webSocketPair = new WebSocketPair()
+    const [client, server] = Object.values(webSocketPair)
+    this.ctx.acceptWebSocket(server)
+    const session: Session = {
+      authenticated: false,
+      name: "",
+      history_requested: false,
+      client_ip: request.headers.get("cf-connecting-ip") || "",
+      last_messages: [],
+      user_id: "",
+    }
+    server.serializeAttachment(session)
+    this.sessions.set(server, session)
+
+    return new Response(null, {
+      status: 101,
+      webSocket: client,
+    })
   }
 
   private broadcast(message: WSMessageType) {
@@ -829,7 +850,7 @@ export class DO extends DurableObject<Env> {
 
   async remove_role(userId: string, role: string): Promise<void> {
     const usersWithRole = await this.getUsersWithRole(role)
-    const updatedUsers = usersWithRole.filter(id => id !== userId)
+    const updatedUsers = usersWithRole.filter((id) => id !== userId)
     await this.ctx.storage.put(`role_${role}`, updatedUsers)
   }
 
@@ -976,7 +997,7 @@ export class DO extends DurableObject<Env> {
     session: string,
   ): Promise<{ name: string; name_color: string; user_id: string }> {
     const user_id = await this.ctx.storage.get<string>(`twitch_user_id_${session}`)
-    let user_data: { name: string; name_color: string; user_id: string } | null = null
+    let user_data: { name: string; name_color: string; user_id: string } | null
 
     // make sure that after the logic, the cache is valid and has everything
     if (user_id === undefined) {
@@ -1256,7 +1277,7 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
         const [key, value] = cookie.trim().split("=")
         if (key === "swarm_fm_player_session") {
           const session = await this.twitch_session_check(value)
-          if (session && await this.hasRole(session.user_id, "mod")) {
+          if (session && (await this.hasRole(session.user_id, "mod"))) {
             return true
           }
         }
