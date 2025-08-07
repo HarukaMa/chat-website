@@ -1117,7 +1117,7 @@ export default {
       }
       return stub.fetch(request)
     } else if (url.pathname === "/flush_emote_cache") {
-      return stub.flush_emote_cache()
+      return stub.flush_emote_cache(request)
     } else if (url.pathname === "/session_debug") {
       return stub.session_debug(request)
     } else if (url.pathname.startsWith("/7tv/")) {
