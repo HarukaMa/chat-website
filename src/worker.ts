@@ -229,8 +229,15 @@ export class DO extends DurableObject<Env> {
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("PING", "PONG"))
 
     // hardcoded admin list for now...
-    this.admins = ["haruka_ff", "boop_dot", "key0__0"]
-    this.devs = ["haruka_ff", "KTrain5369"]
+    this.admins = [
+      "51241857", // haruka_ff
+      "278730238", // boop_dot
+      "752652273", // key0__0
+    ]
+    this.devs = [
+      "51241857", // haruka_ff
+      "560576477", // KTrain5369
+    ]
 
     this.commands = new Map([
       ["/timeout", this.command_timeout_user.bind(this)],
@@ -486,7 +493,7 @@ export class DO extends DurableObject<Env> {
       session.last_messages.shift()
     }
     if (session.last_messages.length == 5) {
-      if (this.admins.indexOf(session.name) === -1 && now - session.last_messages[0] < 5000) {
+      if (this.admins.indexOf(session.user_id) === -1 && now - session.last_messages[0] < 5000) {
         await this.ctx.storage.put(`timeout_${session.user_id}`, now + 10000)
         this.broadcast({ type: "user_timed_out", name: session.name, duration: 30 })
         return
@@ -576,7 +583,7 @@ export class DO extends DurableObject<Env> {
       ws.close(1007, "unauthenticated")
       return
     }
-    if (this.admins.indexOf(session.name) === -1) {
+    if (this.admins.indexOf(session.user_id) === -1) {
       ws.close(1007, "unauthorized")
       return
     }
@@ -596,7 +603,7 @@ export class DO extends DurableObject<Env> {
       ws.close(1007, "unauthenticated")
       return
     }
-    if (this.admins.indexOf(session.name) === -1) {
+    if (this.admins.indexOf(session.user_id) === -1) {
       ws.close(1007, "unauthorized")
       return
     }
@@ -607,7 +614,7 @@ export class DO extends DurableObject<Env> {
     if (msg.type !== "send_message") {
       return
     }
-    if (this.admins.indexOf(session.name) === -1) {
+    if (this.admins.indexOf(session.user_id) === -1) {
       ws.close(1007, "unauthorized")
       return
     }
@@ -620,13 +627,13 @@ export class DO extends DurableObject<Env> {
   }
 
   private async timeout_user(name: string, duration: number, ws: WebSocket) {
-    if (this.admins.indexOf(name) !== -1) {
-      ws.send(JSON.stringify({ type: "error", message: "You cannot timeout other admins" }))
-      return
-    }
     const user_id = await this.ctx.storage.get<string>(`twitch_user_id_from_name_${name}`)
     if (user_id === undefined) {
       ws.send(JSON.stringify({ type: "error", message: "User not found" }))
+      return
+    }
+    if (this.admins.indexOf(user_id) !== -1) {
+      ws.send(JSON.stringify({ type: "error", message: "You cannot timeout other admins" }))
       return
     }
     await this.ctx.storage.put(`timeout_${user_id}`, Date.now() + duration * 1000)
@@ -641,7 +648,7 @@ export class DO extends DurableObject<Env> {
       ws.close(1007, "unauthenticated")
       return
     }
-    if (this.admins.indexOf(session.name) === -1) {
+    if (this.admins.indexOf(session.user_id) === -1) {
       ws.close(1007, "unauthorized")
       return
     }
@@ -652,7 +659,7 @@ export class DO extends DurableObject<Env> {
     if (msg.type !== "send_message") {
       return
     }
-    if (this.admins.indexOf(session.name) === -1) {
+    if (this.admins.indexOf(session.user_id) === -1) {
       ws.close(1007, "unauthorized")
       return
     }
@@ -665,13 +672,13 @@ export class DO extends DurableObject<Env> {
   }
 
   private async ban_user(name: string, ws: WebSocket) {
-    if (this.admins.indexOf(name) !== -1) {
-      ws.send(JSON.stringify({ type: "error", message: "You cannot ban other admins" }))
-      return
-    }
     const user_id = await this.ctx.storage.get<string>(`twitch_user_id_from_name_${name}`)
     if (user_id === undefined) {
       ws.send(JSON.stringify({ type: "error", message: "User not found" }))
+      return
+    }
+    if (this.admins.indexOf(user_id) !== -1) {
+      ws.send(JSON.stringify({ type: "error", message: "You cannot ban other admins" }))
       return
     }
     await this.ctx.storage.put(`ban_${user_id}`, true)
@@ -686,7 +693,7 @@ export class DO extends DurableObject<Env> {
       ws.close(1007, "unauthenticated")
       return
     }
-    if (this.admins.indexOf(session.name) === -1) {
+    if (this.admins.indexOf(session.user_id) === -1) {
       ws.close(1007, "unauthorized")
       return
     }
@@ -697,7 +704,7 @@ export class DO extends DurableObject<Env> {
     if (msg.type !== "send_message") {
       return
     }
-    if (this.admins.indexOf(session.name) === -1) {
+    if (this.admins.indexOf(session.user_id) === -1) {
       ws.close(1007, "unauthorized")
       return
     }
@@ -728,7 +735,7 @@ export class DO extends DurableObject<Env> {
     if (msg.type !== "send_message") {
       return
     }
-    if (this.admins.indexOf(session.name) === -1) {
+    if (this.admins.indexOf(session.user_id) === -1) {
       ws.close(1007, "unauthorized")
       return
     }
@@ -738,7 +745,7 @@ export class DO extends DurableObject<Env> {
     if (msg.type !== "send_message") {
       return
     }
-    if (this.admins.indexOf(session.name) === -1) {
+    if (this.admins.indexOf(session.user_id) === -1) {
       ws.close(1007, "unauthorized")
       return
     }
@@ -756,7 +763,7 @@ export class DO extends DurableObject<Env> {
     if (msg.type !== "send_message") {
       return
     }
-    if (this.admins.indexOf(session.name) === -1) {
+    if (this.admins.indexOf(session.user_id) === -1) {
       ws.close(1007, "unauthorized")
       return
     }
@@ -766,7 +773,7 @@ export class DO extends DurableObject<Env> {
     if (msg.type !== "send_message") {
       return
     }
-    if (this.admins.indexOf(session.name) === -1) {
+    if (this.admins.indexOf(session.user_id) === -1) {
       ws.close(1007, "unauthorized")
       return
     }
@@ -1205,7 +1212,7 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
         const [key, value] = cookie.trim().split("=")
         if (key === "swarm_fm_player_session") {
           const session = await this.twitch_session_check(value)
-          if (!(session && this.admins.includes(session.name))) {
+          if (!(session && this.admins.includes(session.user_id))) {
             return false
           }
         }
