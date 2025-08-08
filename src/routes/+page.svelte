@@ -27,7 +27,7 @@
   let twitch_emotes = $state(data.twitch_emotes)
   let seventv_emotes = $state(data.seventv_emotes)
   let admins = $state(data.admins)
-  let is_admin = $derived(admins.includes(name || ""))
+  let is_admin = $derived(admins.includes(user_id || ""))
 
   let chat_connected = $state(false)
   let chat_reconnecting = $state(false)

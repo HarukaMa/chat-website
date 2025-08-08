@@ -235,7 +235,7 @@ export class DO extends DurableObject<Env> {
     ])
 
     this.init_database()
-    this.init_roles()
+    this.init_roles().then((_) => {})
     this.ctx.storage.getAlarm().then((alarm_time) => {
       if (alarm_time === null) {
         this.ctx.storage.setAlarm(Date.now() + 3600 * 1000).catch((e) => console.error(e))
@@ -245,9 +245,9 @@ export class DO extends DurableObject<Env> {
 
   private async init_roles() {
     // Initialize default roles if they don't exist
-    const adminRoles = await this.ctx.storage.get<string[]>("role_admin")
-    if (!adminRoles) {
-      await this.ctx.storage.put("role_admin", [
+    const modRoles = await this.ctx.storage.get<string[]>("role_mod")
+    if (!modRoles) {
+      await this.ctx.storage.put("role_mod", [
         "51241857", // haruka_ff
         "278730238", // boop_dot
         "752652273", // key0__0

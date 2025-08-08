@@ -191,11 +191,6 @@
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
-
-    img {
-      height: 32px;
-      object-fit: contain;
-    }
   }
 </style>
 
