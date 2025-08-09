@@ -21,6 +21,9 @@ importers:
       '@eslint/js':
         specifier: ^9.32.0
         version: 9.32.0
+      '@montevideo-tech/videojs-cmcd':
+        specifier: ^1.0.9
+        version: 1.0.9
       '@sveltejs/adapter-cloudflare':
         specifier: ^7.1.2
         version: 7.1.2(@sveltejs/kit@2.27.0(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.37.2)(vite@7.0.6(@types/node@24.1.0)(sass-embedded@1.89.2)))(svelte@5.37.2)(vite@7.0.6(@types/node@24.1.0)(sass-embedded@1.89.2)))(wrangler@4.28.0)
@@ -676,6 +679,13 @@ packages:
   '@jridgewell/trace-mapping@0.3.9':
     resolution: {integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==}
 
+  '@montevideo-tech/cmcd-validator@0.3.1':
+    resolution: {integrity: sha512-hcTLzb0Nhpqaxh3T5CokhzVGyK6Hg0kSxiL5wi6kUlDb212G/5SQkcsjbcN+LLWx51ZwHX2k19QXG2N7rYmjeA==}
+
+  '@montevideo-tech/videojs-cmcd@1.0.9':
+    resolution: {integrity: sha512-hLUSVI38+kKDUFs2f6lIwsotzfj2r4EVTmDvlTHSszoHP1u3DSzJpbTIrjRxsHpd6v9o2fBKlKSmftGYiie6YQ==}
+    engines: {node: '>=14', npm: '>=6'}
+
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
     engines: {node: '>= 8'}
@@ -844,6 +854,9 @@ packages:
     peerDependencies:
       svelte: ^5.0.0
       vite: ^6.3.0 || ^7.0.0
+
+  '@svta/common-media-library@0.6.4':
+    resolution: {integrity: sha512-0QG+7PzNf5gO1+2hZAS8/vGglkJ5w4+bG/UbcTRkdobIlCXd7Bujdu9WeNsDR2mMLNBqhilS9+gKgvXRU905Hg==}
 
   '@types/cookie@0.6.0':
     resolution: {integrity: sha512-4Kh9a6B2bQciAhf7FSuMRRkUWecJgJu9nPnx3yzpsfXX/c50REIqpHY4C82bXP90qrLtXtkDxTZosYO3UpOwlA==}
@@ -2293,6 +2306,15 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.4
 
+  '@montevideo-tech/cmcd-validator@0.3.1': {}
+
+  '@montevideo-tech/videojs-cmcd@1.0.9':
+    dependencies:
+      '@montevideo-tech/cmcd-validator': 0.3.1
+      '@svta/common-media-library': 0.6.4
+      global: 4.4.0
+      video.js: 8.23.3
+
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
       '@nodelib/fs.stat': 2.0.5
@@ -2436,6 +2458,8 @@ snapshots:
       vitefu: 1.1.1(vite@7.0.6(@types/node@24.1.0)(sass-embedded@1.89.2))
     transitivePeerDependencies:
       - supports-color
+
+  '@svta/common-media-library@0.6.4': {}
 
   '@types/cookie@0.6.0': {}
 

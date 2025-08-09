@@ -9,6 +9,7 @@
   import type { Action } from "svelte/action"
   import videojs from "video.js"
   import "video.js/dist/video-js.css"
+  import "@montevideo-tech/videojs-cmcd"
   import type Player from "video.js/dist/types/player"
   import type LiveTracker from "video.js/dist/types/live-tracker"
   import type QualityLevelList from "videojs-contrib-quality-levels/dist/types/quality-level-list"
@@ -436,10 +437,12 @@
         nativeVideoTracks: is_apple_mobile,
       },
     })
+    // @ts-expect-error videojs plugin injection
+    player.cmcd({cid: "Swarm FM on Player"})
     change_stream_type()
 
-    // @ts-expect-error unknown
-    let quality_levels: QualityLevelList = (player as unknown).qualityLevels()
+    // @ts-expect-error videojs plugin injection
+    let quality_levels: QualityLevelList = player.qualityLevels()
     quality_levels.on("addqualitylevel", (e: { qualityLevel: QualityLevel }) => {
       if (stream_quality === "Auto" || stream_quality === "Audio only") {
         e.qualityLevel.enabled_(true)
