@@ -29,7 +29,6 @@
   let seventv_emotes = $state(data.seventv_emotes)
   let admins = $state(data.admins)
   let is_admin = $derived(admins.includes(user_id || ""))
-  let roles = $state(data.roles)
 
   let chat_connected = $state(false)
   let chat_reconnecting = $state(false)
@@ -852,7 +851,7 @@
             {#if "type" in message}
               <em style="color: #aaa">{message.message}</em>
             {:else}
-              <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} {roles} {is_admin} {delete_message} logged_in_user={name} />
+              <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} {is_admin} {delete_message} logged_in_user={name} />
             {/if}
           </div>
         {/each}
