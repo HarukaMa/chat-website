@@ -609,8 +609,8 @@ export class DO extends DurableObject<Env> {
       let name_color = name_color_cache.get(user_id)
       if (name_color === undefined) {
         name_color =
-          (await this.ctx.storage.get<string>(`twitch_user_color_${user_id}`)) ||
           (await this.ctx.storage.get<string>(`twitch_user_color_${name}`)) || // can remove this after 3 days past deployment
+          (await this.ctx.storage.get<string>(`twitch_user_color_${user_id}`)) ||
           ""
         name_color_cache.set(user_id, name_color)
       }
