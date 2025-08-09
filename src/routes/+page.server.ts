@@ -6,9 +6,11 @@ export const load: PageServerLoad = async ({ platform, cookies }) => {
   let twitch_logged_in = false
   let name: string | null = null
   let name_color: string | null = null
+  let user_id: string | null = null
   let twitch_emotes: TwitchEmotes | null = null
   let seventv_emotes: SevenTVEmotes | null = null
   let admins: string[] = []
+  let roles: string[] = []
 
   if (platform) {
     const id = platform.env.DO.idFromName("chat")
@@ -19,6 +21,8 @@ export const load: PageServerLoad = async ({ platform, cookies }) => {
         twitch_logged_in = true
         name = user.name
         name_color = user.name_color
+        user_id = user.user_id
+        roles = await stub.get_user_roles(user_id)
       }
     }
     twitch_emotes = await stub.twitch_emotes()
@@ -27,12 +31,14 @@ export const load: PageServerLoad = async ({ platform, cookies }) => {
   }
 
   return {
-    session: cookies.get("swarm_fm_player_session"),
+    session,
     twitch_logged_in,
     name,
     name_color,
+    user_id,
     twitch_emotes,
     seventv_emotes,
     admins,
+    roles,
   }
 }

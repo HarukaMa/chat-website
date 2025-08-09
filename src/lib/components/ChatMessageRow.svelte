@@ -2,6 +2,7 @@
   import type { SevenTVEmotes, TwitchEmotes } from "../../worker"
   import copy_icon from "$lib/assets/fa-copy.svg"
   import ChatMessageEmote from "$lib/components/ChatMessageEmote.svelte"
+  import ChatBadge from "$lib/components/ChatBadge.svelte"
   import { browser } from "$app/environment"
 
   type ChatMessageProps = {
@@ -10,11 +11,13 @@
     name_color: string
     message: string
     timestamp_ms: number
+    roles: string[] // Add roles prop
     twitch_emotes: TwitchEmotes | null
     seventv_emotes: SevenTVEmotes | null
     is_admin: boolean
     delete_message: (id: number) => Promise<void>
     logged_in_user: string | null
+    logged_in_user_id?: string | null
   }
 
   enum EmoteType {
@@ -28,11 +31,13 @@
     name_color,
     message,
     timestamp_ms,
+    roles, // Add roles to destructuring
     twitch_emotes,
     seventv_emotes,
     is_admin,
     delete_message,
     logged_in_user,
+    logged_in_user_id,
   }: ChatMessageProps = $props()
 
   function format_timestamp(timestamp_ms: number) {
@@ -176,6 +181,11 @@
   .chat-link:hover {
     color: #6bb3ff;
   }
+
+  .chat-name-container {
+    display: inline-flex;
+    align-items: center;
+  }
 </style>
 
 <div class="chat-message" class:chat-mentioned={is_mentioned}>
@@ -183,9 +193,13 @@
     <span class="chat-delete" style="color: #aaa; font-size: 12px" onclick={delete_this_message}>⨯</span>
   {/if}
   <span style="color: #aaa; font-size: 12px">{format_timestamp(timestamp_ms)}</span>
-  <!-- no line break - can't have whitespace here -->
-  <span style="color: {name_color}">{name}</span>:
-  {#each message_parts as part}
+  <span class="chat-name-container">
+    {#each roles as role (role)}
+      <ChatBadge {role} />
+    {/each}
+    <span style="color: {name_color}">{name}</span>:
+  </span>
+  {#each message_parts as part, index (index)}
     {#if typeof part === "string"}
       <span>{part}</span>
     {:else if "emote" in part}
