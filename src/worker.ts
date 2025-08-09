@@ -606,20 +606,30 @@ export class DO extends DurableObject<Env> {
     const roles_cache = new Map<string, string[]>()
     for (const db_message of messages) {
       const { id, name, message, timestamp_ms, user_id } = db_message
-      let name_color = name_color_cache.get(user_id)
-      if (name_color === undefined) {
-        name_color =
-          (await this.ctx.storage.get<string>(`twitch_user_color_${name}`)) || // can remove this after 3 days past deployment
-          (await this.ctx.storage.get<string>(`twitch_user_color_${user_id}`)) ||
-          ""
-        name_color_cache.set(user_id, name_color)
+      let name_color: string | undefined
+      if (user_id) {
+        name_color = name_color_cache.get(user_id)
+        if (name_color === undefined) {
+          name_color = await this.ctx.storage.get<string>(`twitch_user_color_${user_id}`)
+          if (name_color !== undefined) {
+            name_color_cache.set(user_id, name_color)
+          }
+        }
+      } else {
+        name_color = name_color_cache.get(name)
+        if (name_color === undefined) {
+          name_color = await this.ctx.storage.get<string>(`twitch_user_color_${name}`)
+          if (name_color !== undefined) {
+            name_color_cache.set(name, name_color)
+          }
+        }
       }
       let roles = roles_cache.get(user_id)
       if (roles === undefined) {
         roles = await this.get_user_roles(user_id)
         roles_cache.set(user_id, roles)
       }
-      history_messages.push({ id, name, name_color, message, timestamp_ms, roles, user_id })
+      history_messages.push({ id, name, name_color: name_color || "", message, timestamp_ms, roles, user_id })
     }
     ws.send(JSON.stringify({ type: "message_history", messages: history_messages.toReversed() }))
   }
