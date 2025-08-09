@@ -32,6 +32,9 @@
     justify-content: center;
     height: 20px;
     width: 20px;
+    cursor: default;
+    user-select: none;
+    -webkit-user-select: none;
   }
 </style>
 
