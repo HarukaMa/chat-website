@@ -140,7 +140,7 @@
     const g = parseInt(name_color.substring(3, 5), 16) / 255
     const b = parseInt(name_color.substring(5, 7), 16) / 255
     const y = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    if (y < 0.3) {
+    if (y < 0.2) {
       // convert rgb to hsl
       const v = Math.max(r, g, b)
       const x_min = Math.min(r, g, b)
