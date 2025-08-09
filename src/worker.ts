@@ -581,7 +581,7 @@ export class DO extends DurableObject<Env> {
     if (color === undefined) {
       color = ""
     }
-    const roles = await this.get_user_roles(session.name) // Get user roles
+    const roles = await this.get_user_roles(session.user_id) // Get user roles
     this.broadcast({
       type: "new_message",
       message: { id, name: session.name, name_color: color, message: msg.message, timestamp_ms: now, roles, user_id: session.user_id },
@@ -606,18 +606,18 @@ export class DO extends DurableObject<Env> {
     const roles_cache = new Map<string, string[]>()
     for (const db_message of messages) {
       const { id, name, message, timestamp_ms, user_id } = db_message
-      let name_color = name_color_cache.get(name)
+      let name_color = name_color_cache.get(user_id)
       if (name_color === undefined) {
         name_color =
           (await this.ctx.storage.get<string>(`twitch_user_color_${user_id}`)) ||
           (await this.ctx.storage.get<string>(`twitch_user_color_${name}`)) || // can remove this after 3 days past deployment
           ""
-        name_color_cache.set(name, name_color)
+        name_color_cache.set(user_id, name_color)
       }
-      let roles = roles_cache.get(name)
+      let roles = roles_cache.get(user_id)
       if (roles === undefined) {
-        roles = await this.get_user_roles(name)
-        roles_cache.set(name, roles)
+        roles = await this.get_user_roles(user_id)
+        roles_cache.set(user_id, roles)
       }
       history_messages.push({ id, name, name_color, message, timestamp_ms, roles, user_id })
     }
