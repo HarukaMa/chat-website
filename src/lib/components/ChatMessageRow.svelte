@@ -185,7 +185,6 @@
   .chat-name-container {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
   }
 </style>
 
@@ -194,14 +193,13 @@
     <span class="chat-delete" style="color: #aaa; font-size: 12px" onclick={delete_this_message}>⨯</span>
   {/if}
   <span style="color: #aaa; font-size: 12px">{format_timestamp(timestamp_ms)}</span>
-  <!-- no line break - can't have whitespace here -->
   <span class="chat-name-container">
-    {#each roles as role}
+    {#each roles as role (role)}
       <ChatBadge {role} />
     {/each}
     <span style="color: {name_color}">{name}</span>:
   </span>
-  {#each message_parts as part, index}
+  {#each message_parts as part, index (index)}
     {#if typeof part === "string"}
       <span>{part}</span>
     {:else if "emote" in part}
