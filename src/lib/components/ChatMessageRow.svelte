@@ -131,6 +131,43 @@
   function copy_message() {
     navigator.clipboard.writeText(message)
   }
+
+  function color_adjustment() {
+    if (name_color === "") {
+      return name_color
+    }
+    const r = parseInt(name_color.substring(1, 3), 16) / 255
+    const g = parseInt(name_color.substring(3, 5), 16) / 255
+    const b = parseInt(name_color.substring(5, 7), 16) / 255
+    const y = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    if (y < 0.3) {
+      // convert rgb to hsl
+      const v = Math.max(r, g, b)
+      const x_min = Math.min(r, g, b)
+      const c = v - x_min
+      const l = v - c / 2
+      let h: number
+      if (c === 0) {
+        h = 0
+      } else if (v === r) {
+        h = (g - b) / c
+      } else if (v === g) {
+        h = 2 + (b - r) / c
+      } else {
+        h = 4 + (r - g) / c
+      }
+      h = Math.round(h * 60)
+      if (h < 0) {
+        h += 360
+      }
+      if (h >= 360) {
+        h -= 360
+      }
+      const s = c === 0 ? 0 : c / (1 - Math.abs(2 * l - 1))
+      return `hsl(${h}, ${s * 100}%, ${(l + 0.2) * 100}%)`
+    }
+    return name_color
+  }
 </script>
 
 <style>
@@ -197,7 +234,7 @@
     {#each roles as role (role)}
       <ChatBadge {role} />
     {/each}
-    <span style="color: {name_color}">{name}</span>:
+    <span style="color: {color_adjustment()}">{name}</span>:
   </span>
   {#each message_parts as part, index (index)}
     {#if typeof part === "string"}
