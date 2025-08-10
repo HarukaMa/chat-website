@@ -2,7 +2,7 @@ import type { PageServerLoad } from "./$types"
 import type { SevenTVEmotes, TwitchEmotes } from "../worker"
 
 export const load: PageServerLoad = async ({ platform, cookies }) => {
-  const session = cookies.get("swarm_fm_player_session")
+  const session = cookies.get("swarm_fm_player_session") || null
   let twitch_logged_in = false
   let name: string | null = null
   let name_color: string | null = null
