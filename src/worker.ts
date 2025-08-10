@@ -48,6 +48,7 @@ export type ChatMessage = {
   timestamp_ms: number
   roles: string[] // Add roles to chat messages
   user_id: string
+  reply_to_id: number | null
 }
 
 export type WSMessageType =
@@ -66,6 +67,7 @@ export type WSMessageType =
   // client -> server
   | { type: "authenticate"; session: string }
   | { type: "send_message"; message: string }
+  | { type: "send_message_v2"; message: string; reply_to_id: number | null }
   | { type: "delete_message"; id: number }
   | { type: "timeout_user"; name: string; duration: number }
   | { type: "ban_user"; name: string }
@@ -336,6 +338,13 @@ export class DO extends DurableObject<Env> {
       this.ctx.storage.sql.exec(`ALTER TABLE messages ADD COLUMN user_id TEXT NOT NULL DEFAULT ""`)
       this.ctx.storage.sql.exec(`INSERT INTO migrations (id) VALUES (1)`)
     }
+
+    // migration 2: add reply_to column to messages table
+    cursor = this.ctx.storage.sql.exec("SELECT id FROM migrations WHERE id = 2")
+    if (cursor.toArray().length === 0) {
+      this.ctx.storage.sql.exec(`ALTER TABLE messages ADD COLUMN reply_to_id INTEGER`)
+      this.ctx.storage.sql.exec(`INSERT INTO migrations (id) VALUES (2)`)
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -414,7 +423,8 @@ export class DO extends DurableObject<Env> {
         break
       }
 
-      case "send_message": {
+      case "send_message":
+      case "send_message_v2": {
         await this.ws_send_message(msg, session, ws)
         break
       }
@@ -468,7 +478,7 @@ export class DO extends DurableObject<Env> {
     }
   }
 
-  async ws_authenticate(msg: WSMessageType, session: Session, ws: WebSocket) {
+  private async ws_authenticate(msg: WSMessageType, session: Session, ws: WebSocket) {
     if (!("session" in msg)) {
       ws.close(1007, "invalid message content")
       return
@@ -511,7 +521,7 @@ export class DO extends DurableObject<Env> {
   }
 
   private async ws_send_message(msg: WSMessageType, session: Session, ws: WebSocket) {
-    if (msg.type !== "send_message") {
+    if (msg.type !== "send_message" && msg.type !== "send_message_v2") {
       return
     }
     if (!session.authenticated) {
@@ -564,10 +574,15 @@ export class DO extends DurableObject<Env> {
       return
     }
 
+    let reply_to_id: number | null = null
+    if (msg.type === "send_message_v2") {
+      reply_to_id = msg.reply_to_id
+    }
+
     const result = this.ctx.storage.sql.exec<{ id: number }>(
-      `INSERT INTO messages (name, message, timestamp_ms, user_id)
-           VALUES (?, ?, ?, ?) RETURNING id`,
-      ...[session.name, msg.message, now, session.user_id],
+      `INSERT INTO messages (name, message, timestamp_ms, user_id, reply_to_id)
+           VALUES (?, ?, ?, ?, ?) RETURNING id`,
+      ...[session.name, msg.message, now, session.user_id, reply_to_id],
     )
     let id: number | undefined
     for (const row of result) {
@@ -584,7 +599,16 @@ export class DO extends DurableObject<Env> {
     const roles = await this.get_user_roles(session.user_id) // Get user roles
     this.broadcast({
       type: "new_message",
-      message: { id, name: session.name, name_color: color, message: msg.message, timestamp_ms: now, roles, user_id: session.user_id },
+      message: {
+        id,
+        name: session.name,
+        name_color: color,
+        message: msg.message,
+        timestamp_ms: now,
+        roles,
+        user_id: session.user_id,
+        reply_to_id: reply_to_id,
+      },
     })
   }
 
@@ -595,8 +619,15 @@ export class DO extends DurableObject<Env> {
     }
     session.history_requested = true
     ws.serializeAttachment(session)
-    const messages = this.ctx.storage.sql.exec<{ id: number; name: string; message: string; timestamp_ms: number; user_id: string }>(
-      `SELECT id, name, message, timestamp_ms, user_id
+    const messages = this.ctx.storage.sql.exec<{
+      id: number
+      name: string
+      message: string
+      timestamp_ms: number
+      user_id: string
+      reply_to_id: number
+    }>(
+      `SELECT id, name, message, timestamp_ms, user_id, reply_to_id
            FROM messages
            ORDER BY timestamp_ms DESC
            LIMIT 500`,
@@ -605,7 +636,7 @@ export class DO extends DurableObject<Env> {
     const name_color_cache = new Map<string, string>()
     const roles_cache = new Map<string, string[]>()
     for (const db_message of messages) {
-      const { id, name, message, timestamp_ms, user_id } = db_message
+      const { id, name, message, timestamp_ms, user_id, reply_to_id } = db_message
       let name_color: string | undefined
       if (user_id) {
         name_color = name_color_cache.get(user_id)
@@ -629,7 +660,7 @@ export class DO extends DurableObject<Env> {
         roles = await this.get_user_roles(user_id)
         roles_cache.set(user_id, roles)
       }
-      history_messages.push({ id, name, name_color: name_color || "", message, timestamp_ms, roles, user_id })
+      history_messages.push({ id, name, name_color: name_color || "", message, timestamp_ms, roles, user_id, reply_to_id })
     }
     ws.send(JSON.stringify({ type: "message_history", messages: history_messages.toReversed() }))
   }
@@ -786,7 +817,7 @@ export class DO extends DurableObject<Env> {
   }
 
   // Updated role assignment methods
-  async command_assign_role(msg: WSMessageType, session: Session, ws: WebSocket) {
+  private async command_assign_role(msg: WSMessageType, session: Session, ws: WebSocket) {
     if (msg.type !== "send_message") {
       return
     }
@@ -851,7 +882,7 @@ export class DO extends DurableObject<Env> {
     this.broadcast({ type: "role_updated", name: msg.name, roles: await this.get_user_roles(targetUserId) })
   }
 
-  async assign_role(userId: string, role: string): Promise<void> {
+  private async assign_role(userId: string, role: string): Promise<void> {
     const usersWithRole = await this.getUsersWithRole(role)
     if (!usersWithRole.includes(userId)) {
       usersWithRole.push(userId)
@@ -859,7 +890,7 @@ export class DO extends DurableObject<Env> {
     }
   }
 
-  async command_remove_role(msg: WSMessageType, session: Session, ws: WebSocket) {
+  private async command_remove_role(msg: WSMessageType, session: Session, ws: WebSocket) {
     if (msg.type !== "send_message") {
       return
     }
@@ -912,7 +943,7 @@ export class DO extends DurableObject<Env> {
     this.broadcast({ type: "role_updated", name: msg.name, roles: await this.get_user_roles(targetUserId) })
   }
 
-  async remove_role(userId: string, role: string): Promise<void> {
+  private async remove_role(userId: string, role: string): Promise<void> {
     const usersWithRole = await this.getUsersWithRole(role)
     const updatedUsers = usersWithRole.filter((id) => id !== userId)
     await this.ctx.storage.put(`role_${role}`, updatedUsers)
