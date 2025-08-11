@@ -126,6 +126,7 @@
     player = videojs(node, {
       autoplay: true,
       controls: true,
+      playsinline: true,
       preload: "auto",
       fill: true,
       liveui: true,
