@@ -142,7 +142,7 @@
       },
     })
     // @ts-expect-error videojs plugin injection
-    player.cmcd({ cid: "Swarm FM on Player" })
+    player.cmcd({ cid: "Swarm FM on Player", sid: session })
     change_stream_type()
 
     // @ts-expect-error videojs plugin injection
