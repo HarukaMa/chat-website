@@ -347,6 +347,29 @@
     align-items: center;
     padding-right: 1rem;
   }
+
+  @media screen and (width <= 400px) {
+    #player-control {
+      font-size: 14px;
+    }
+  }
+
+  @media screen and (width <= 480px) {
+    #main {
+      flex-direction: column;
+    }
+
+    #player {
+      width: 100%;
+      height: 35%;
+    }
+  }
+
+  @media screen and (width <= 768px) {
+    #stats {
+      display: none;
+    }
+  }
 </style>
 
 <svelte:head>

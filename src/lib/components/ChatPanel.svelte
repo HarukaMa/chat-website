@@ -356,6 +356,18 @@
     color: #eee;
   }
 
+  @media screen and (width <= 1280px) {
+    #chat-container {
+      width: 30%;
+    }
+  }
+
+  @media screen and (width <= 480px) {
+    #chat-container {
+      width: 100%;
+      height: 65%;
+    }
+  }
   #chat-status {
     height: 2rem;
     width: 100%;
