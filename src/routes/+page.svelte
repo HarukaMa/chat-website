@@ -397,6 +397,6 @@
         </div>
       </div>
     </div>
-    <ChatPanel {name} {session} {is_admin} {seventv_emotes} {twitch_emotes} {twitch_logged_in} />
+    <ChatPanel {name} {user_id} {session} {is_admin} {seventv_emotes} {twitch_emotes} {twitch_logged_in} />
   </div>
 </div>

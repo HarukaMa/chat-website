@@ -7,6 +7,8 @@
   import type { ChatMessage, SevenTVEmotes, TwitchEmotes, WSMessageType } from "../../worker"
   import { lower_cmp } from "$lib/utils"
   import type { Action } from "svelte/action"
+  import cancel_icon from "$lib/assets/fa-circle-xmark.svg"
+  import { SvelteMap } from "svelte/reactivity"
 
   type ChatPanelProps = {
     twitch_logged_in: boolean
@@ -15,9 +17,10 @@
     seventv_emotes: SevenTVEmotes | null
     is_admin: boolean
     name: string | null
+    user_id: string | null
   }
 
-  let { twitch_logged_in, session, twitch_emotes, seventv_emotes, is_admin, name }: ChatPanelProps = $props()
+  let { twitch_logged_in, session, twitch_emotes, seventv_emotes, is_admin, name, user_id }: ChatPanelProps = $props()
 
   let chat_connected = $state(false)
   let chat_reconnecting = $state(false)
@@ -32,12 +35,14 @@
 
   let chat_ws: WebSocket | undefined
 
-  let chat_messages: (ChatMessage | { id: string; type: "error" | "notification"; message: string })[] = $state([])
+  let chat_messages: Map<number | string, ChatMessage | { id: string; type: "error" | "notification"; message: string }> = new SvelteMap()
   let chat_messages_container: HTMLDivElement
 
   let chat_reconnection_timeout = $state(0)
 
   let online_users: string[] = $state([])
+
+  let chat_replying_to: ChatMessage | null = $state(null)
 
   onMount(() => {
     connect_chat()
@@ -120,18 +125,20 @@
         add_non_chat_message("notification", `Authenticated as ${message.name}`)
         break
       case "message_history": {
-        const existing_ids = new Set(chat_messages.map((m) => m.id))
         for (const m of message.messages) {
-          if (!existing_ids.has(m.id)) {
-            chat_messages.push(m)
+          if (!chat_messages.has(m.id)) {
+            chat_messages.set(m.id, m)
           }
         }
         break
       }
       case "new_message":
-        chat_messages.push(message.message)
-        if (chat_messages.length > 1000) {
-          chat_messages = chat_messages.slice(-1000)
+        chat_messages.set(message.message.id, message.message)
+        if (chat_messages.size > 1000) {
+          const keys = chat_messages.keys()
+          for (let i = 0; i < chat_messages.size - 1000; i++) {
+            chat_messages.delete(keys.next().value!)
+          }
         }
         break
       case "user_list":
@@ -170,7 +177,8 @@
   }
 
   function add_non_chat_message(type: "error" | "notification", message: string) {
-    chat_messages.push({ id: window.crypto.randomUUID(), type, message })
+    const message_id = window.crypto.randomUUID()
+    chat_messages.set(message_id, { id: message_id, type, message })
   }
 
   async function handle_chat_keydown(e: KeyboardEvent) {
@@ -178,8 +186,9 @@
     if (e.key === "Enter") {
       e.preventDefault()
       if (input.trim() === "") return
-      await send_chat_message({ type: "send_message", message: input.trim() })
+      await send_chat_message({ type: "send_message_v2", message: input.trim(), reply_to_id: chat_replying_to?.id ?? null })
       chat_input_element!.innerText = ""
+      chat_replying_to = null
     } else if (e.key === "Tab") {
       e.preventDefault()
       autocomplete(input)
@@ -200,19 +209,21 @@
     if (input === "") return
     const current_selection = window.getSelection()!
     const current_range = current_selection.getRangeAt(0)
-    console.log("current selection", current_selection)
-    console.log("current range", current_range)
+
     if (autocomplete_partial === "") {
       // get the word just before the cursor
       const input_before_cursor = input.slice(0, current_range.startOffset)
       const words = input_before_cursor.split(" ")
       autocomplete_partial = words[words.length - 1].toLowerCase()
       if (autocomplete_partial === "") return
+      // check autocomplete type and get candidates
       if (autocomplete_partial.startsWith("@")) {
+        // autocomplete users
         autocomplete_partial = autocomplete_partial.slice(1)
         if (autocomplete_partial === "") return
         autocomplete_candidates = online_users.filter((user) => user.toLowerCase().startsWith(autocomplete_partial))
       } else {
+        // autocomplete emotes
         autocomplete_candidates =
           seventv_emotes
             ?.keys()
@@ -227,11 +238,8 @@
       }
       autocomplete_candidates.sort(lower_cmp)
     }
-    console.log("autocomplete partial", autocomplete_partial)
-    console.log("autocomplete candidates", autocomplete_candidates)
     if (autocomplete_candidates.length === 0) return
-    console.log("autocomplete current index", autocomplete_current_index)
-    const input_cursor = current_range.startOffset
+
     let backtrack_length = autocomplete_partial.length
     if (!autocomplete_first_tab) {
       let previous_index = autocomplete_current_index - 1
@@ -239,28 +247,26 @@
         previous_index = autocomplete_candidates.length - 1
       }
       const previous_autocomplete = autocomplete_candidates[previous_index]
-      console.log("previous autocomplete", previous_autocomplete)
       backtrack_length = previous_autocomplete.length
     }
-    console.log("backtrack length", backtrack_length)
     autocomplete_first_tab = false
+
+    // update input
+    const input_cursor = current_range.startOffset
     const input_before_cursor = input.slice(0, input_cursor - backtrack_length)
-    console.log("input before cursor", input_before_cursor)
     const input_after_cursor = input.slice(input_cursor)
-    console.log("input after cursor", input_after_cursor)
     const autocomplete_next_candidate = autocomplete_candidates[autocomplete_current_index]
-    console.log("autocomplete next candidate", autocomplete_next_candidate)
     chat_input_element!.innerText = input_before_cursor + autocomplete_next_candidate + input_after_cursor
-    console.log("chat input", chat_input_element!.innerText)
+
+    // move cursor to end of autocomplete
     const range = document.createRange()
     range.setStart(chat_input_element!.childNodes[0], input_before_cursor.length + autocomplete_next_candidate.length)
-    console.log("range start", input_before_cursor.length + autocomplete_next_candidate.length)
     range.collapse(true)
     const selection = window.getSelection()
     selection!.removeAllRanges()
     selection!.addRange(range)
+
     autocomplete_current_index = (autocomplete_current_index + 1) % autocomplete_candidates.length
-    console.log("autocomplete next index", autocomplete_current_index)
   }
 
   async function handle_chat_input() {
@@ -286,12 +292,8 @@
   }
 
   function message_deleted(id: number) {
-    for (let i = 0; i < chat_messages.length; i++) {
-      const message = chat_messages[i]
-      if (typeof message === "object" && message.id === id) {
-        chat_messages.splice(i, 1)
-        break
-      }
+    for (let i = 0; i < chat_messages.size; i++) {
+      chat_messages.delete(id)
     }
   }
 
@@ -333,6 +335,14 @@
         }
       }
     }
+  }
+
+  async function reply_to_message(message: ChatMessage) {
+    chat_replying_to = message
+  }
+
+  function cancel_reply() {
+    chat_replying_to = null
   }
 </script>
 
@@ -376,23 +386,24 @@
     width: 100%;
     background-color: #333;
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    gap: 0.25rem;
     flex: 0 0 auto;
+    flex-direction: column;
   }
 
   #chat-input-area {
     flex: 1 1 auto;
     display: flex;
+    flex-direction: row;
     border: 1px solid #555;
     border-radius: 4px;
     min-height: 2rem;
     align-items: end;
     margin: 0.5rem;
+    width: calc(100% - 1rem);
 
     span {
       flex: 1 1 auto;
-      height: 100%;
       min-height: 1.75rem;
       border: 0;
       background-color: #333;
@@ -419,7 +430,6 @@
     font-size: 12px;
     margin-right: 0.25rem;
     margin-bottom: 0.25rem;
-    height: 100%;
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
@@ -442,6 +452,40 @@
   #chat-input-field:empty:before {
     content: attr(data-placeholder);
     color: grey;
+  }
+
+  #chat-replying-to {
+    padding: 0.5rem 0.75rem 0;
+    font-size: 12px;
+    color: #aaa;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    position: relative;
+  }
+
+  #chat-replying-to-name {
+    font-weight: bold;
+    font-size: 14px;
+  }
+
+  #chat-replying-to-message {
+    border-top: 1px solid #555;
+    padding-top: 0.25rem;
+    padding-left: 0.5rem;
+  }
+
+  #chat-replying-to-cancel {
+    cursor: pointer;
+    position: absolute;
+    top: 0.5rem;
+    right: 0.75rem;
+    width: 16px;
+    height: 16px;
+
+    img {
+      filter: invert(1) brightness(0.5);
+    }
   }
 </style>
 
@@ -467,12 +511,22 @@
     {/if}
   </div>
   <div id="chat-messages" bind:this={chat_messages_container} onscroll={on_chat_scroll}>
-    {#each chat_messages as message (message.id)}
+    {#each chat_messages.values() as message (message.id)}
       <div use:scroll_to_bottom>
         {#if "type" in message}
           <em style="color: #aaa">{message.message}</em>
         {:else}
-          <ChatMessageRow {...message} {twitch_emotes} {seventv_emotes} {is_admin} {delete_message} logged_in_user={name} />
+          <ChatMessageRow
+            {message}
+            {twitch_emotes}
+            {seventv_emotes}
+            {is_admin}
+            {delete_message}
+            logged_in_user={name}
+            logged_in_user_id={user_id}
+            {reply_to_message}
+            replying_to_message={message.reply_to_id ? ((chat_messages.get(message.reply_to_id) as ChatMessage) ?? null) : null}
+          />
         {/if}
       </div>
     {/each}
@@ -481,6 +535,15 @@
     {/if}
   </div>
   <div id="chat-input">
+    {#if chat_replying_to}
+      <div id="chat-replying-to">
+        <span id="chat-replying-to-name">Replying to: @{chat_replying_to.name}</span>
+        <div id="chat-replying-to-message">{chat_replying_to.message}</div>
+        <div id="chat-replying-to-cancel">
+          <img src={cancel_icon} alt="Cancel" onclick={cancel_reply} />
+        </div>
+      </div>
+    {/if}
     <div id="chat-input-area">
       <span
         id="chat-input-field"

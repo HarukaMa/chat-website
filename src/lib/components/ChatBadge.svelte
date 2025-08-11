@@ -22,7 +22,6 @@
   .chat-badge {
     display: inline-flex;
     font-size: 0.75rem;
-    margin-right: 0.25rem;
     border-radius: 0.25rem;
     color: white;
     font-weight: bold;
@@ -35,6 +34,12 @@
     cursor: default;
     user-select: none;
     -webkit-user-select: none;
+    top: -2px;
+    position: relative;
+  }
+
+  :global(.chat-badge + .chat-badge) {
+    margin-left: 0.25rem;
   }
 </style>
 

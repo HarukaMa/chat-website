@@ -1,23 +1,21 @@
 <script lang="ts">
-  import type { SevenTVEmotes, TwitchEmotes } from "../../worker"
+  import type { ChatMessage, SevenTVEmotes, TwitchEmotes } from "../../worker"
   import copy_icon from "$lib/assets/fa-copy.svg"
+  import reply_icon from "$lib/assets/fa-reply.svg"
   import ChatMessageEmote from "$lib/components/ChatMessageEmote.svelte"
   import ChatBadge from "$lib/components/ChatBadge.svelte"
   import { browser } from "$app/environment"
 
   type ChatMessageProps = {
-    id: number
-    name: string
-    name_color: string
-    message: string
-    timestamp_ms: number
-    roles: string[] // Add roles prop
+    message: ChatMessage
     twitch_emotes: TwitchEmotes | null
     seventv_emotes: SevenTVEmotes | null
     is_admin: boolean
     delete_message: (id: number) => Promise<void>
     logged_in_user: string | null
     logged_in_user_id?: string | null
+    replying_to_message: ChatMessage | null
+    reply_to_message: (message: ChatMessage) => Promise<void>
   }
 
   enum EmoteType {
@@ -26,18 +24,15 @@
   }
 
   let {
-    id,
-    name,
-    name_color,
     message,
-    timestamp_ms,
-    roles, // Add roles to destructuring
     twitch_emotes,
     seventv_emotes,
     is_admin,
     delete_message,
     logged_in_user,
     logged_in_user_id,
+    reply_to_message,
+    replying_to_message,
   }: ChatMessageProps = $props()
 
   function format_timestamp(timestamp_ms: number) {
@@ -82,7 +77,7 @@
 
   const message_parts: (string | { emote: string; zero_widths: string[] } | { link: string })[] = []
 
-  const words = message.split(" ")
+  const words = message.message.split(" ")
   const current_segment = []
   for (let i = 0; i < words.length; i++) {
     const word = words[i]
@@ -124,21 +119,29 @@
     message_parts.push(current_segment.join(" "))
   }
 
+  if (replying_to_message?.user_id === logged_in_user_id) {
+    is_mentioned = true
+  }
+
   async function delete_this_message() {
-    await delete_message(id)
+    await delete_message(message.id)
   }
 
   function copy_message() {
-    navigator.clipboard.writeText(message)
+    navigator.clipboard.writeText(message.message)
+  }
+
+  function reply_message() {
+    reply_to_message(message)
   }
 
   function color_adjustment() {
-    if (name_color === "") {
-      return name_color
+    if (message.name_color === "") {
+      return message.name_color
     }
-    const r = parseInt(name_color.substring(1, 3), 16) / 255
-    const g = parseInt(name_color.substring(3, 5), 16) / 255
-    const b = parseInt(name_color.substring(5, 7), 16) / 255
+    const r = parseInt(message.name_color.substring(1, 3), 16) / 255
+    const g = parseInt(message.name_color.substring(3, 5), 16) / 255
+    const b = parseInt(message.name_color.substring(5, 7), 16) / 255
     const y = 0.2126 * r + 0.7152 * g + 0.0722 * b
     if (y < 0.4) {
       // convert rgb to hsl
@@ -168,7 +171,7 @@
       const adjusted_l = l + (0.4 - y) / 1.5
       return `hsl(${h}, ${s * 100}%, ${adjusted_l * 100}%)`
     }
-    return name_color
+    return message.name_color
   }
 </script>
 
@@ -179,8 +182,8 @@
     overflow-wrap: anywhere;
     padding: 0.25rem;
 
-    &:hover .chat-message-copy {
-      display: block;
+    &:hover .chat-message-ops {
+      display: flex;
     }
   }
 
@@ -192,17 +195,22 @@
     cursor: pointer;
   }
 
-  .chat-message-copy {
+  .chat-message-ops {
     display: none;
-    height: 16px;
-    width: 16px;
-    cursor: pointer;
     position: absolute;
     right: 0.25rem;
     top: 0.25rem;
+    gap: 0.25rem;
+    flex-direction: row-reverse;
 
     img {
       filter: invert(1);
+    }
+
+    > div {
+      cursor: pointer;
+      height: 16px;
+      width: 16px;
     }
   }
 
@@ -225,18 +233,37 @@
     display: inline-flex;
     align-items: center;
   }
+
+  .chat-delete {
+    color: #aaa;
+    font-size: 12px;
+  }
+
+  .chat-replying-to {
+    font-size: 12px;
+    color: #ccc;
+    padding-left: 0.5rem;
+    text-wrap: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 </style>
 
 <div class="chat-message" class:chat-mentioned={is_mentioned}>
-  {#if is_admin}
-    <span class="chat-delete" style="color: #aaa; font-size: 12px" onclick={delete_this_message}>⨯</span>
+  {#if replying_to_message}
+    <div class="chat-replying-to">
+      Replying to: @{replying_to_message.name}: {replying_to_message.message}
+    </div>
   {/if}
-  <span style="color: #aaa; font-size: 12px">{format_timestamp(timestamp_ms)}</span>
+  {#if is_admin}
+    <span class="chat-delete" onclick={delete_this_message}>⨯</span>
+  {/if}
+  <span style="color: #aaa; font-size: 12px">{format_timestamp(message.timestamp_ms)}</span>
+  {#each message.roles as role (role)}
+    <ChatBadge {role} />
+  {/each}
   <span class="chat-name-container">
-    {#each roles as role (role)}
-      <ChatBadge {role} />
-    {/each}
-    <span style="color: {color_adjustment()}">{name}</span>:
+    <span style="color: {color_adjustment()}">{message.name}</span>:
   </span>
   {#each message_parts as part, index (index)}
     {#if typeof part === "string"}
@@ -247,7 +274,12 @@
       <a class="chat-link" href={part.link} target="_blank" rel="noopener noreferrer">{part.link}</a>
     {/if}
   {/each}
-  <div class="chat-message-copy" onclick={copy_message}>
-    <img src={copy_icon} alt="Copy message" />
+  <div class="chat-message-ops">
+    <div class="chat-message-copy" onclick={copy_message}>
+      <img src={copy_icon} alt="Copy message" />
+    </div>
+    <div class="chat-message-reply" onclick={reply_message}>
+      <img src={reply_icon} alt="Reply message" />
+    </div>
   </div>
 </div>
