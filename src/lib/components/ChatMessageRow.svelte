@@ -135,13 +135,32 @@
     reply_to_message(message)
   }
 
-  function color_adjustment() {
+  async function color_adjustment() {
+    let color = message.name_color
     if (message.name_color === "") {
-      return message.name_color
+      const default_colors = [
+        "#ff0000",
+        "#0000ff",
+        "#008000",
+        "#b22222",
+        "#ff7f50",
+        "#9acd32",
+        "#ff4500",
+        "#2e8b57",
+        "#daa520",
+        "#d2691e",
+        "#5f9ea0",
+        "#1e90ff",
+        "#ff69b4",
+        "#8a2be2",
+        "#00ff7f",
+      ]
+      const name_hash = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(message.name))
+      color = default_colors[Math.abs(new Uint8Array(name_hash)[0]) % default_colors.length]
     }
-    const r = parseInt(message.name_color.substring(1, 3), 16) / 255
-    const g = parseInt(message.name_color.substring(3, 5), 16) / 255
-    const b = parseInt(message.name_color.substring(5, 7), 16) / 255
+    const r = parseInt(color.substring(1, 3), 16) / 255
+    const g = parseInt(color.substring(3, 5), 16) / 255
+    const b = parseInt(color.substring(5, 7), 16) / 255
     const y = 0.2126 * r + 0.7152 * g + 0.0722 * b
     if (y < 0.4) {
       // convert rgb to hsl
@@ -171,7 +190,7 @@
       const adjusted_l = l + (0.4 - y) / 1.5
       return `hsl(${h}, ${s * 100}%, ${adjusted_l * 100}%)`
     }
-    return message.name_color
+    return color
   }
 </script>
 
@@ -263,7 +282,9 @@
     <ChatBadge {role} />
   {/each}
   <span class="chat-name-container">
-    <span style="color: {color_adjustment()}">{message.name}</span>:
+    {#await color_adjustment() then color}
+      <span style="color: {color}">{message.name}</span>:
+    {/await}
   </span>
   {#each message_parts as part, index (index)}
     {#if typeof part === "string"}
