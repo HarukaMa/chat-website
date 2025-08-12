@@ -188,7 +188,7 @@
   }
 
   .chat-mentioned {
-    background-color: #573;
+    background-color: #442;
   }
 
   .chat-delete {
