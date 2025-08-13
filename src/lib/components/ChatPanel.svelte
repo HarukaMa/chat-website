@@ -538,6 +538,7 @@
             logged_in_user_id={user_id}
             {reply_to_message}
             replying_to_message={message.reply_to_id ? ((chat_messages.get(message.reply_to_id) as ChatMessage) ?? null) : null}
+            {scroll_to_bottom}
           />
         {/if}
       </div>

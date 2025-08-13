@@ -16,6 +16,7 @@
     logged_in_user_id?: string | null
     replying_to_message: ChatMessage | null
     reply_to_message: (message: ChatMessage) => Promise<void>
+    scroll_to_bottom: () => void
   }
 
   enum EmoteType {
@@ -33,6 +34,7 @@
     logged_in_user_id,
     reply_to_message,
     replying_to_message,
+    scroll_to_bottom,
   }: ChatMessageProps = $props()
 
   function format_timestamp(timestamp_ms: number) {
@@ -289,7 +291,7 @@
   {/each}
   <span class="chat-name-container">
     {#await color_adjustment() then color}
-      <span style="color: {color}">{message.name}</span>:
+      <span style="color: {color}" use:scroll_to_bottom>{message.name}</span>:
     {/await}
   </span>
   {#each message_parts as part, index (index)}
