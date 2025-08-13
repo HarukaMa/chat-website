@@ -262,9 +262,15 @@
     font-size: 12px;
     color: #ccc;
     padding-left: 0.5rem;
-    text-wrap: nowrap;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .chat-timestamp {
+    color: #aaa;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
   }
 </style>
 
@@ -277,7 +283,7 @@
   {#if is_admin}
     <span class="chat-delete" onclick={delete_this_message}>⨯</span>
   {/if}
-  <span style="color: #aaa; font-size: 12px">{format_timestamp(message.timestamp_ms)}</span>
+  <span class="chat-timestamp">{format_timestamp(message.timestamp_ms)}</span>
   {#each message.roles as role (role)}
     <ChatBadge {role} />
   {/each}
