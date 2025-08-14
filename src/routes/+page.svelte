@@ -93,8 +93,8 @@
 
   let stream_manifest_url_base = "https://customer-x1r232qaorg7edh8.cloudflarestream.com/3a05b1a1049e0f24ef1cd7b51733ff09/manifest/video"
 
-  let stream_types = ["HLS", "Low L-word HLS (BETA)"]
-  let stream_type = $state("HLS")
+  let stream_types = ["Normal", "Low L-word (BETA)"]
+  let stream_type = $state("Normal")
   let stream_qualities = ["Auto", "1080", "720", "480", "360", "240", "Audio only"]
   let stream_quality = $state("Auto")
 
@@ -108,11 +108,11 @@
       clearInterval(player_debug_update_task_id)
     }
     const ls = window.localStorage
-    const ls_stream_type = ls.getItem("player_stream_type") ?? "HLS"
+    const ls_stream_type = ls.getItem("player_stream_type") ?? "Normal"
     if (stream_types.indexOf(ls_stream_type) !== -1) {
       stream_type = ls_stream_type
     } else {
-      stream_type = "HLS"
+      stream_type = "Normal"
     }
     const ls_stream_quality = ls.getItem("player_stream_quality") ?? "Auto"
     if (stream_qualities.indexOf(ls_stream_quality) !== -1) {
@@ -175,7 +175,7 @@
       const current_time = player!.currentTime() as number
       const live_current_time = live_tracker.liveCurrentTime()
       total_duration = live_current_time
-      const latency_offset = stream_type === "Low L-word HLS (BETA)" ? 0 : 10
+      const latency_offset = stream_type === "Low L-word (BETA)" ? 0 : 10
       live_latency = live_current_time - current_time + latency_offset
       const buffer_end = player!.bufferedEnd()
       buffer_duration = buffer_end - current_time
@@ -189,14 +189,14 @@
     console.log("change stream type", stream_type)
     window.localStorage.setItem("player_stream_type", stream_type)
     let source: string | { src: string; type: string }
-    if (stream_type === "Low L-word HLS (BETA)") {
+    if (stream_type === "Low L-word (BETA)") {
       const manifest_link = stream_manifest_url_base + ".m3u8?protocol=llhlsbeta"
       if (stream_quality === "Audio only") {
         source = (await fetch_audio_manifest(manifest_link)) ?? manifest_link
       } else {
         source = manifest_link
       }
-    } else if (stream_type === "HLS") {
+    } else if (stream_type === "Normal") {
       const manifest_link = stream_manifest_url_base + ".m3u8"
       if (stream_quality === "Audio only") {
         source = (await fetch_audio_manifest(manifest_link)) ?? manifest_link
