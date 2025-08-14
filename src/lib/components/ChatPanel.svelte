@@ -188,7 +188,7 @@
       if (input.trim() === "") return
       console.log(chat_input_element)
       console.log(input)
-      // await send_chat_message({ type: "send_message_v2", message: input.trim(), reply_to_id: chat_replying_to?.id ?? null })
+      await send_chat_message({ type: "send_message_v2", message: input.trim(), reply_to_id: chat_replying_to?.id ?? null })
       chat_input_element!.innerText = ""
       chat_replying_to = null
     } else if (e.key === "Tab") {
@@ -280,7 +280,6 @@
 
   function insert_text_at_cursor(text: string) {
     text = text.replace(/\n/g, " ")
-    console.log(text)
     const input = chat_input_element!.innerText
     const input_cursor = window.getSelection()!.getRangeAt(0).startOffset
     const input_before_cursor = input.slice(0, input_cursor)
@@ -296,8 +295,6 @@
   }
 
   function before_chat_input(e: InputEvent) {
-    console.log(e)
-    console.log(e.inputType, e.dataTransfer, e.data)
     switch (e.inputType) {
       case "insertFromComposition":
       case "insertFromDrop":
