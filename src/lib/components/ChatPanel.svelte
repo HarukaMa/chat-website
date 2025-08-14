@@ -186,7 +186,9 @@
     if (e.key === "Enter") {
       e.preventDefault()
       if (input.trim() === "") return
-      await send_chat_message({ type: "send_message_v2", message: input.trim(), reply_to_id: chat_replying_to?.id ?? null })
+      console.log(chat_input_element)
+      console.log(input)
+      // await send_chat_message({ type: "send_message_v2", message: input.trim(), reply_to_id: chat_replying_to?.id ?? null })
       chat_input_element!.innerText = ""
       chat_replying_to = null
     } else if (e.key === "Tab") {
@@ -269,7 +271,77 @@
     autocomplete_current_index = (autocomplete_current_index + 1) % autocomplete_candidates.length
   }
 
-  async function handle_chat_input() {
+  type UndoAction = {
+    start: number
+    length: number
+  }
+
+  let history_stack: UndoAction[] = []
+
+  function insert_text_at_cursor(text: string) {
+    text = text.replace(/\n/g, " ")
+    console.log(text)
+    const input = chat_input_element!.innerText
+    const input_cursor = window.getSelection()!.getRangeAt(0).startOffset
+    const input_before_cursor = input.slice(0, input_cursor)
+    const input_after_cursor = input.slice(input_cursor)
+    chat_input_element!.innerText = input_before_cursor + text + input_after_cursor
+    const range = document.createRange()
+    range.setStart(chat_input_element!.childNodes[0], input_before_cursor.length + text.length)
+    range.collapse(true)
+    const selection = window.getSelection()
+    selection!.removeAllRanges()
+    selection!.addRange(range)
+    history_stack.push({ start: input_cursor, length: text.length })
+  }
+
+  function before_chat_input(e: InputEvent) {
+    console.log(e)
+    console.log(e.inputType, e.dataTransfer, e.data)
+    switch (e.inputType) {
+      case "insertFromComposition":
+      case "insertFromDrop":
+      case "insertFromPaste":
+      case "insertFromYank":
+      case "insertReplacementText":
+      case "insertText":
+        if (e.dataTransfer) {
+          e.preventDefault()
+          for (const item of e.dataTransfer.items) {
+            if (item.type === "text/plain") {
+              item.getAsString((text) => {
+                insert_text_at_cursor(text)
+              })
+              break
+            }
+          }
+        } else {
+          history_stack = []
+        }
+        break
+      case "insertLineBreak":
+      case "insertParagraph":
+        e.preventDefault()
+        break
+      case "historyUndo":
+        if (history_stack.length > 0) {
+          e.preventDefault()
+          const action = history_stack.pop()!
+          const input = chat_input_element!.innerText
+          const input_before_cursor = input.slice(0, action.start)
+          const input_after_cursor = input.slice(action.start + action.length)
+          chat_input_element!.innerText = input_before_cursor + input_after_cursor
+          const range = document.createRange()
+          range.setStart(chat_input_element!.childNodes[0], action.start)
+          range.collapse(true)
+          const selection = window.getSelection()
+          selection!.removeAllRanges()
+          selection!.addRange(range)
+        }
+    }
+  }
+
+  function handle_chat_input() {
     const input = chat_input_element!.innerText
     if (input.length > 500) {
       chat_input_element!.innerText = input.slice(0, 500)
@@ -280,8 +352,10 @@
       selection!.removeAllRanges()
       selection!.addRange(range)
       chat_input_element!.focus()
+      chat_input_length = 500
+    } else {
+      chat_input_length = input.length
     }
-    chat_input_length = input.length
     if (chat_input_element!.innerHTML === "<br>") {
       chat_input_element!.innerHTML = ""
     }
@@ -562,8 +636,9 @@
         id="chat-input-field"
         bind:this={chat_input_element}
         data-placeholder={twitch_logged_in ? "Enter message" : "Login to chat"}
-        contenteditable={twitch_logged_in && chat_authenticated && chat_connected ? "plaintext-only" : "false"}
+        contenteditable={twitch_logged_in && chat_authenticated && chat_connected ? "true" : "false"}
         onkeydown={handle_chat_keydown}
+        onbeforeinput={before_chat_input}
         oninput={handle_chat_input}
       ></span>
       <div id="chat-input-counter">

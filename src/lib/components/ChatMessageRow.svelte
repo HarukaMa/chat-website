@@ -5,6 +5,7 @@
   import ChatMessageEmote from "$lib/components/ChatMessageEmote.svelte"
   import ChatBadge from "$lib/components/ChatBadge.svelte"
   import { browser } from "$app/environment"
+  import type { Action } from "svelte/action"
 
   type ChatMessageProps = {
     message: ChatMessage
@@ -16,7 +17,7 @@
     logged_in_user_id?: string | null
     replying_to_message: ChatMessage | null
     reply_to_message: (message: ChatMessage) => Promise<void>
-    scroll_to_bottom: () => void
+    scroll_to_bottom: Action
   }
 
   enum EmoteType {
@@ -279,7 +280,7 @@
 <div class="chat-message" class:chat-mentioned={is_mentioned}>
   {#if replying_to_message}
     <div class="chat-replying-to">
-      Replying to: @{replying_to_message.name}: {replying_to_message.message}
+      Replying to @{replying_to_message.name}: {replying_to_message.message}
     </div>
   {/if}
   {#if is_admin}
