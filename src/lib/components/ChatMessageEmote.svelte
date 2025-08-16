@@ -190,13 +190,13 @@
 
 <div class="chat-message-emote" bind:this={root_element} onmouseenter={show_popup} onmouseleave={hide_popup}>
   {@render emote_snippet(emote.url_1x, emote.url_2x, emote.url_3x, emote.url_4x, emote.name, max_width)}
-  {#each zw_emotes as zw_emote (zw_emote.name)}
+  {#each zw_emotes as zw_emote, i (i)}
     {@render emote_snippet(zw_emote.url_1x, zw_emote.url_2x, zw_emote.url_3x, zw_emote.url_4x, zw_emote.name, max_width)}
   {/each}
 </div>{#if popup_shown}<div class="popup" use:position_popup>
     {@render emote_popup_snippet(emote.url_4x, emote.name, emote.width, emote.set_name, emote.owner, emote.original_name)}
     <div class="popup-zw">
-      {#each zw_emotes as zw_emote (zw_emote.name)}
+      {#each zw_emotes as zw_emote, i (i)}
         {@render emote_popup_snippet(
           zw_emote.url_4x,
           zw_emote.name,
