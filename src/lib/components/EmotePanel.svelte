@@ -201,8 +201,8 @@
   <div class="emote-panel" bind:this={emote_panel} use:open_emote_panel>
     <input type="search" class="emote-search-input" bind:value={emote_search_value} placeholder="Search emotes" oninput={search_emotes} />
     <div class="emote-panel-tabs" style:display={emote_search_value === "" ? "" : "none"}>
-      <button class="emote-panel-tab active" bind:this={twitch_button} onclick={switch_tab}>Twitch</button>
-      <button class="emote-panel-tab" bind:this={seventv_button} onclick={switch_tab}>7TV</button>
+      <button class="emote-panel-tab" class:active={current_tab === "twitch"} bind:this={twitch_button} onclick={switch_tab}>Twitch</button>
+      <button class="emote-panel-tab" class:active={current_tab === "seventv"} bind:this={seventv_button} onclick={switch_tab}>7TV</button>
     </div>
     <div class="emote-panel-list">
       <div class="emote-panel-list-page" style:display={emote_search_value === "" ? "none" : ""}>
