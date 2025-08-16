@@ -176,7 +176,7 @@
   <div class="popup-emote-section">
     <img loading="lazy" class="popup-emote" src={url_4x} alt={name} style="width: {width * 4}px" />
     <div class="popup-emote-name">{name}</div>
-    {#if original_name !== name}
+    {#if original_name !== null && original_name !== name}
       <div class="popup-emote-alias-name">Alias of {original_name}</div>
     {/if}
     <div class="popup-emote-set-name">{set_name}</div>
