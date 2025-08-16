@@ -42,7 +42,7 @@
     }
   }
 
-  let emote_panel: HTMLDivElement
+  let emote_panel: HTMLDivElement | undefined = $state(undefined)
   let emote_button: HTMLDivElement
 
   let emote_panel_open = $state(false)
@@ -50,20 +50,21 @@
   function toggle_emote_panel() {
     emote_panel_open = !emote_panel_open
     if (emote_panel_open) {
-      emote_panel.style.display = "flex"
-      computePosition(emote_button, emote_panel, {
-        strategy: "fixed",
-        placement: "top-start",
-        middleware: [offset(10), flip(), shift()],
-      }).then(({ x, y }) => {
-        emote_panel.style.left = `${x}px`
-        emote_panel.style.top = `${y}px`
-      })
       document.addEventListener("click", handle_click_outside)
     } else {
       document.removeEventListener("click", handle_click_outside)
-      emote_panel.style.display = "none"
     }
+  }
+
+  function open_emote_panel(node: HTMLDivElement) {
+    computePosition(emote_button, node, {
+      strategy: "fixed",
+      placement: "top-start",
+      middleware: [offset(10), flip(), shift()],
+    }).then(({ x, y }) => {
+      node.style.left = `${x}px`
+      node.style.top = `${y}px`
+    })
   }
 
   function handle_click_outside(event: MouseEvent) {
@@ -75,7 +76,6 @@
       !emote_button.contains(event.target as Node)
     ) {
       emote_panel_open = false
-      emote_panel.style.display = "none"
       document.removeEventListener("click", handle_click_outside)
     }
   }
@@ -125,7 +125,7 @@
   }
 
   .emote-panel {
-    display: none;
+    display: flex;
     position: fixed;
     top: 0;
     left: 0;
@@ -197,43 +197,45 @@
 <div class="emote-button" bind:this={emote_button} onclick={toggle_emote_panel}>
   <img src={emote_icon} alt="emotes" />
 </div>
-<div class="emote-panel" bind:this={emote_panel}>
-  <input type="search" class="emote-search-input" bind:value={emote_search_value} placeholder="Search emotes" oninput={search_emotes} />
-  <div class="emote-panel-tabs" style:display={emote_search_value === "" ? "" : "none"}>
-    <button class="emote-panel-tab active" bind:this={twitch_button} onclick={switch_tab}>Twitch</button>
-    <button class="emote-panel-tab" bind:this={seventv_button} onclick={switch_tab}>7TV</button>
-  </div>
-  <div class="emote-panel-list">
-    <div class="emote-panel-list-page" style:display={emote_search_value === "" ? "none" : ""}>
-      {#each filtered_emotes as name (name)}
-        <div class="emote-panel-list-emote" onclick={() => insert_emote(name)}>
-          <ChatMessageEmote {name} zero_widths={[]} twitch_emotes={twitch_emotes_map} seventv_emotes={seventv_emotes_map} />
-        </div>
-      {/each}
+{#if emote_panel_open}
+  <div class="emote-panel" bind:this={emote_panel} use:open_emote_panel>
+    <input type="search" class="emote-search-input" bind:value={emote_search_value} placeholder="Search emotes" oninput={search_emotes} />
+    <div class="emote-panel-tabs" style:display={emote_search_value === "" ? "" : "none"}>
+      <button class="emote-panel-tab active" bind:this={twitch_button} onclick={switch_tab}>Twitch</button>
+      <button class="emote-panel-tab" bind:this={seventv_button} onclick={switch_tab}>7TV</button>
     </div>
-    <div class="emote-panel-list-page" style:display={emote_search_value === "" && current_tab === "twitch" ? "" : "none"}>
-      {#each twitch_emotes as [channel, emotes] (channel)}
-        <div class="emote-panel-list-header">
-          {channel}
-        </div>
-        {#each emotes as name (name)}
+    <div class="emote-panel-list">
+      <div class="emote-panel-list-page" style:display={emote_search_value === "" ? "none" : ""}>
+        {#each filtered_emotes as name (name)}
           <div class="emote-panel-list-emote" onclick={() => insert_emote(name)}>
             <ChatMessageEmote {name} zero_widths={[]} twitch_emotes={twitch_emotes_map} seventv_emotes={seventv_emotes_map} />
           </div>
         {/each}
-      {/each}
-    </div>
-    <div class="emote-panel-list-page" style:display={emote_search_value === "" && current_tab === "seventv" ? "" : "none"}>
-      {#each seventv_emotes as [set_name, emotes] (set_name)}
-        <div class="emote-panel-list-header">
-          {set_name}
-        </div>
-        {#each emotes as name (name)}
-          <div class="emote-panel-list-emote" onclick={() => insert_emote(name)}>
-            <ChatMessageEmote {name} zero_widths={[]} twitch_emotes={twitch_emotes_map} seventv_emotes={seventv_emotes_map} />
+      </div>
+      <div class="emote-panel-list-page" style:display={emote_search_value === "" && current_tab === "twitch" ? "" : "none"}>
+        {#each twitch_emotes as [channel, emotes] (channel)}
+          <div class="emote-panel-list-header">
+            {channel}
           </div>
+          {#each emotes as name (name)}
+            <div class="emote-panel-list-emote" onclick={() => insert_emote(name)}>
+              <ChatMessageEmote {name} zero_widths={[]} twitch_emotes={twitch_emotes_map} seventv_emotes={seventv_emotes_map} />
+            </div>
+          {/each}
         {/each}
-      {/each}
+      </div>
+      <div class="emote-panel-list-page" style:display={emote_search_value === "" && current_tab === "seventv" ? "" : "none"}>
+        {#each seventv_emotes as [set_name, emotes] (set_name)}
+          <div class="emote-panel-list-header">
+            {set_name}
+          </div>
+          {#each emotes as name (name)}
+            <div class="emote-panel-list-emote" onclick={() => insert_emote(name)}>
+              <ChatMessageEmote {name} zero_widths={[]} twitch_emotes={twitch_emotes_map} seventv_emotes={seventv_emotes_map} />
+            </div>
+          {/each}
+        {/each}
+      </div>
     </div>
   </div>
-</div>
+{/if}

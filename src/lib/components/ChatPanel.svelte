@@ -281,9 +281,10 @@
   function insert_text_at_cursor(text: string) {
     text = text.replace(/\n/g, " ")
     const input = chat_input_element!.innerText
-    const input_cursor = window.getSelection()!.getRangeAt(0).startOffset
-    const input_before_cursor = input.slice(0, input_cursor)
-    const input_after_cursor = input.slice(input_cursor)
+    const input_start_offset = window.getSelection()!.getRangeAt(0).startOffset
+    const input_end_offset = window.getSelection()!.getRangeAt(0).endOffset
+    const input_before_cursor = input.slice(0, input_start_offset)
+    const input_after_cursor = input.slice(input_end_offset)
     chat_input_element!.innerText = input_before_cursor + text + input_after_cursor
     const range = document.createRange()
     range.setStart(chat_input_element!.childNodes[0], input_before_cursor.length + text.length)
@@ -291,27 +292,22 @@
     const selection = window.getSelection()
     selection!.removeAllRanges()
     selection!.addRange(range)
-    history_stack.push({ start: input_cursor, length: text.length })
+    history_stack.push({ start: input_start_offset, length: text.length })
   }
 
   function before_chat_input(e: InputEvent) {
     switch (e.inputType) {
       case "insertFromComposition":
       case "insertFromDrop":
-      case "insertFromPaste":
       case "insertFromYank":
       case "insertReplacementText":
       case "insertText":
+        history_stack = []
+        break
+      case "insertFromPaste":
         if (e.dataTransfer) {
           e.preventDefault()
-          for (const item of e.dataTransfer.items) {
-            if (item.type === "text/plain") {
-              item.getAsString((text) => {
-                insert_text_at_cursor(text)
-              })
-              break
-            }
-          }
+          insert_text_at_cursor(e.dataTransfer.getData("text/plain"))
         } else {
           history_stack = []
         }
