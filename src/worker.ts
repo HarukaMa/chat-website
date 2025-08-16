@@ -166,6 +166,7 @@ export type SevenTVEmoteSetServer = {
         flags: number
         name: string
         data: {
+          name: string
           animated: boolean
           flags: number
           host: {
@@ -192,6 +193,7 @@ export type SevenTVEmote = {
   height: number
   width: number
   set_name: string
+  original_name: string
 }
 
 export type SevenTVEmotes = Map<string, SevenTVEmote>
@@ -1285,6 +1287,7 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
       flags
       name
       data {
+        name
         animated
         flags
         host {
@@ -1317,25 +1320,19 @@ query EmoteSet($emoteSetId: ObjectID!, $formats: [ImageFormat!]) {
     })
     const json = await response.json<SevenTVEmoteSetServer>()
     const emote_set_name = `${json.data.emoteSet.owner.display_name} - ${json.data.emoteSet.name}`
-    const emotes = new Map()
+    const emotes: Map<string, SevenTVEmote> = new Map()
     for (const emote of json.data.emoteSet.emotes) {
-      const emote_name = emote.name
-      const emote_animated = emote.data.animated
-      const emote_flags = emote.flags
-      const emote_url = emote.data.host.url
-      const emote_owner = emote.data.owner.username
-      const emote_height = emote.data.host.files[0].height
-      const emote_width = emote.data.host.files[0].width
       const emote_data = {
-        animated: emote_animated,
-        zero_width: (emote_flags & 1) === 1,
-        url: emote_url,
-        owner: emote_owner,
-        height: emote_height,
-        width: emote_width,
+        animated: emote.data.animated,
+        zero_width: (emote.flags & 1) === 1,
+        url: emote.data.host.url,
+        owner: emote.data.owner.username,
+        height: emote.data.host.files[0].height,
+        width: emote.data.host.files[0].width,
         set_name: emote_set_name,
+        original_name: emote.data.name,
       }
-      emotes.set(emote_name, emote_data)
+      emotes.set(emote.name, emote_data)
     }
     return emotes
   }

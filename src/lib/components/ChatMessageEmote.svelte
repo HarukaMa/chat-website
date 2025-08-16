@@ -22,6 +22,7 @@
     width: number
     set_name: string
     owner: string
+    original_name: string | null
   } {
     // apple fix
     const is_safari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
@@ -34,7 +35,16 @@
         const url_2x = url + "/2x." + seventv_format
         const url_3x = url + "/3x." + seventv_format
         const url_4x = url + "/4x." + seventv_format
-        return { url_1x, url_2x, url_3x, url_4x, width: emote_data.width, set_name: emote_data.set_name, owner: emote_data.owner }
+        return {
+          url_1x,
+          url_2x,
+          url_3x,
+          url_4x,
+          width: emote_data.width,
+          set_name: emote_data.set_name,
+          owner: emote_data.owner,
+          original_name: emote_data.original_name,
+        }
       }
     }
     if (twitch_emotes) {
@@ -51,10 +61,11 @@
           width: 32,
           set_name: `${emote_data.channel} Twitch Emotes`,
           owner: "",
+          original_name: null,
         }
       }
     }
-    return { url_1x: "", url_2x: "", url_3x: "", url_4x: "", width: 0, set_name: "", owner: "" }
+    return { url_1x: "", url_2x: "", url_3x: "", url_4x: "", width: 0, set_name: "", owner: "", original_name: null }
   }
 
   const emote = { name: name, ...get_emote_data(name) }
@@ -161,10 +172,13 @@
   />
 {/snippet}
 
-{#snippet emote_popup_snippet(url_4x: string, name: string, width: number, set_name: string, owner: string)}
+{#snippet emote_popup_snippet(url_4x: string, name: string, width: number, set_name: string, owner: string, original_name: string | null)}
   <div class="popup-emote-section">
     <img loading="lazy" class="popup-emote" src={url_4x} alt={name} style="width: {width * 4}px" />
     <div class="popup-emote-name">{name}</div>
+    {#if original_name !== name}
+      <div class="popup-emote-alias-name">Alias of {original_name}</div>
+    {/if}
     <div class="popup-emote-set-name">{set_name}</div>
     {#if owner !== ""}
       <div class="popup-emote-owner">By: {owner}</div>
@@ -178,10 +192,17 @@
     {@render emote_snippet(zw_emote.url_1x, zw_emote.url_2x, zw_emote.url_3x, zw_emote.url_4x, zw_emote.name, max_width)}
   {/each}
 </div><div class="popup" bind:this={popup_element}>
-  {@render emote_popup_snippet(emote.url_4x, emote.name, emote.width, emote.set_name, emote.owner)}
+  {@render emote_popup_snippet(emote.url_4x, emote.name, emote.width, emote.set_name, emote.owner, emote.original_name)}
   <div class="popup-zw">
     {#each zw_emotes as zw_emote (zw_emote.name)}
-      {@render emote_popup_snippet(zw_emote.url_4x, zw_emote.name, zw_emote.width, zw_emote.set_name, zw_emote.owner)}
+      {@render emote_popup_snippet(
+        zw_emote.url_4x,
+        zw_emote.name,
+        zw_emote.width,
+        zw_emote.set_name,
+        zw_emote.owner,
+        zw_emote.original_name,
+      )}
     {/each}
   </div>
 </div>
