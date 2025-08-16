@@ -12,7 +12,8 @@
   let { name, twitch_emotes, seventv_emotes, zero_widths }: ChatMessageEmoteProps = $props()
 
   let root_element: HTMLDivElement
-  let popup_element: HTMLDivElement
+
+  let popup_shown = $state(false)
 
   function get_emote_data(name: string): {
     url_1x: string
@@ -75,13 +76,16 @@
   const max_width = Math.max(emote.width, ...zw_emotes.map((zw) => zw.width))
 
   function show_popup() {
-    popup_element.style.display = "flex"
-    computePosition(root_element, popup_element, {
+    popup_shown = true
+  }
+
+  function position_popup(element: HTMLDivElement) {
+    computePosition(root_element, element, {
       strategy: "fixed",
       placement: "bottom",
       middleware: [flip(), shift(), offset(4)],
     }).then(({ x, y }) => {
-      Object.assign(popup_element.style, {
+      Object.assign(element.style, {
         left: `${x}px`,
         top: `${y}px`,
       })
@@ -89,7 +93,7 @@
   }
 
   function hide_popup() {
-    popup_element.style.display = "none"
+    popup_shown = false
   }
 </script>
 
@@ -101,11 +105,7 @@
     height: 32px;
     top: 6px;
 
-    &:nth-child(3) {
-      margin-left: 0;
-    }
-
-    &:last-child {
+    &:last-child:not(:first-child) {
       margin-right: 0;
     }
   }
@@ -122,13 +122,15 @@
     }
   }
 
-  :global(.popup + .chat-message-emote) {
+  :global(.popup + .chat-message-emote),
+  :global(.chat-message-emote + .chat-message-emote),
+  :global(.chat-name-container + .chat-message-emote) {
     margin-left: 0;
   }
 
   .popup {
     background-color: #000000c0;
-    display: none;
+    display: flex;
     flex-direction: column;
     align-items: center;
     position: fixed;
@@ -191,18 +193,18 @@
   {#each zw_emotes as zw_emote (zw_emote.name)}
     {@render emote_snippet(zw_emote.url_1x, zw_emote.url_2x, zw_emote.url_3x, zw_emote.url_4x, zw_emote.name, max_width)}
   {/each}
-</div><div class="popup" bind:this={popup_element}>
-  {@render emote_popup_snippet(emote.url_4x, emote.name, emote.width, emote.set_name, emote.owner, emote.original_name)}
-  <div class="popup-zw">
-    {#each zw_emotes as zw_emote (zw_emote.name)}
-      {@render emote_popup_snippet(
-        zw_emote.url_4x,
-        zw_emote.name,
-        zw_emote.width,
-        zw_emote.set_name,
-        zw_emote.owner,
-        zw_emote.original_name,
-      )}
-    {/each}
-  </div>
-</div>
+</div>{#if popup_shown}<div class="popup" use:position_popup>
+    {@render emote_popup_snippet(emote.url_4x, emote.name, emote.width, emote.set_name, emote.owner, emote.original_name)}
+    <div class="popup-zw">
+      {#each zw_emotes as zw_emote (zw_emote.name)}
+        {@render emote_popup_snippet(
+          zw_emote.url_4x,
+          zw_emote.name,
+          zw_emote.width,
+          zw_emote.set_name,
+          zw_emote.owner,
+          zw_emote.original_name,
+        )}
+      {/each}
+    </div>
+  </div>{/if}
