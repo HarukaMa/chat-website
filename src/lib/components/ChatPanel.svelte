@@ -181,10 +181,18 @@
     chat_messages.set(message_id, { id: message_id, type, message })
   }
 
+  function colon_mode_confirm() {
+
+  }
+
   async function handle_chat_keydown(e: KeyboardEvent) {
     const input = chat_input_element!.innerText
     if (e.key === "Enter") {
       e.preventDefault()
+      if (autocomplete_colon_mode) {
+        colon_mode_confirm()
+        return
+      }
       if (input.trim() === "") return
       console.log(chat_input_element)
       console.log(input)
@@ -193,6 +201,10 @@
       chat_replying_to = null
     } else if (e.key === "Tab") {
       e.preventDefault()
+      if (autocomplete_colon_mode) {
+        colon_mode_confirm()
+        return
+      }
       autocomplete(input)
     } else {
       autocomplete_partial = ""
@@ -206,6 +218,8 @@
   let autocomplete_candidates: string[] = []
   let autocomplete_current_index = 0
   let autocomplete_first_tab = true
+  let autocomplete_last_selection_end = 0
+  let autocomplete_colon_mode = $state(false)
 
   function autocomplete(input: string) {
     if (input === "") return
@@ -249,7 +263,7 @@
         previous_index = autocomplete_candidates.length - 1
       }
       const previous_autocomplete = autocomplete_candidates[previous_index]
-      backtrack_length = previous_autocomplete.length
+      backtrack_length = previous_autocomplete.length + 1
     }
     autocomplete_first_tab = false
 
@@ -258,15 +272,16 @@
     const input_before_cursor = input.slice(0, input_cursor - backtrack_length)
     const input_after_cursor = input.slice(input_cursor)
     const autocomplete_next_candidate = autocomplete_candidates[autocomplete_current_index]
-    chat_input_element!.innerText = input_before_cursor + autocomplete_next_candidate + input_after_cursor
+    chat_input_element!.innerText = input_before_cursor + autocomplete_next_candidate + " " + input_after_cursor
 
     // move cursor to end of autocomplete
     const range = document.createRange()
-    range.setStart(chat_input_element!.childNodes[0], input_before_cursor.length + autocomplete_next_candidate.length)
+    range.setStart(chat_input_element!.childNodes[0], input_before_cursor.length + autocomplete_next_candidate.length + 1)
     range.collapse(true)
     const selection = window.getSelection()
     selection!.removeAllRanges()
     selection!.addRange(range)
+    autocomplete_last_selection_end = range.endOffset
 
     autocomplete_current_index = (autocomplete_current_index + 1) % autocomplete_candidates.length
   }
@@ -411,6 +426,26 @@
   function cancel_reply() {
     chat_replying_to = null
   }
+
+  function on_selection_change(e: Event) {
+    console.log(e)
+    const current_selection = window.getSelection()!
+    const current_range = current_selection.getRangeAt(0)
+    if (current_range.endOffset !== autocomplete_last_selection_end) {
+      autocomplete_partial = ""
+      autocomplete_candidates = []
+      autocomplete_current_index = 0
+      autocomplete_last_selection_end = 0
+      autocomplete_first_tab = true
+    }
+  }
+
+  onMount(() => {
+    document.addEventListener("selectionchange", on_selection_change)
+    return () => {
+      document.removeEventListener("selectionchange", on_selection_change)
+    }
+  })
 </script>
 
 <style lang="scss">
