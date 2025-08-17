@@ -9,6 +9,9 @@
   import type { Action } from "svelte/action"
   import cancel_icon from "$lib/assets/fa-circle-xmark.svg"
   import { SvelteMap } from "svelte/reactivity"
+  import { computePosition, offset, shift } from "@floating-ui/dom"
+  import ChatMessageEmote from "$lib/components/ChatMessageEmote.svelte"
+  import scrollIntoView from "scroll-into-view-if-needed"
 
   type ChatPanelProps = {
     twitch_logged_in: boolean
@@ -30,12 +33,20 @@
 
   let chat_should_scroll_to_bottom = $state(true)
 
-  let chat_input_element: HTMLSpanElement | undefined = $state(undefined)
+  let chat_input_field_element: HTMLSpanElement | undefined = $state(undefined)
   let chat_input_length = $state(0)
 
   let chat_ws: WebSocket | undefined
 
-  let chat_messages: Map<number | string, ChatMessage | { id: string; type: "error" | "notification"; message: string }> = new SvelteMap()
+  let chat_messages: Map<
+    number | string,
+    | ChatMessage
+    | {
+        id: string
+        type: "error" | "notification"
+        message: string
+      }
+  > = new SvelteMap()
   let chat_messages_container: HTMLDivElement
 
   let chat_reconnection_timeout = $state(0)
@@ -181,23 +192,107 @@
     chat_messages.set(message_id, { id: message_id, type, message })
   }
 
-  function colon_mode_confirm() {
+  function colon_mode_input() {
+    const current_selection = window.getSelection()!
+    const current_range = current_selection.getRangeAt(0)
+    const input = chat_input_field_element!.innerText
+    const input_before_cursor = input.slice(0, current_range.startOffset)
+    const words = input_before_cursor.split(" ")
+    autocomplete_last_selection_end = current_range.endOffset
+    autocomplete_partial = words[words.length - 1].toLowerCase()
+    if (!autocomplete_partial.startsWith(":")) {
+      autocomplete_colon_mode = false
+      autocomplete_partial = ""
+      autocomplete_current_index = 0
+      return
+    }
+    autocomplete_colon_mode = true
+    const autocomplete_partial_without_colon = autocomplete_partial.slice(1)
+    autocomplete_candidates =
+      seventv_emotes
+        ?.keys()
+        .filter((emote) => emote.toLowerCase().indexOf(autocomplete_partial_without_colon) !== -1)
+        .toArray() ?? []
+    autocomplete_candidates = autocomplete_candidates.concat(
+      twitch_emotes
+        ?.keys()
+        .filter((emote) => emote.toLowerCase().indexOf(autocomplete_partial_without_colon) !== -1)
+        .toArray() ?? [],
+    )
+    autocomplete_candidates.sort(lower_cmp)
+    if (autocomplete_candidates.length === 0) {
+      autocomplete_colon_mode = false
+      autocomplete_partial = ""
+      autocomplete_current_index = 0
+      return
+    }
+    autocomplete_current_index = 0
+    if (autocomplete_element) {
+      position_autocomplete(autocomplete_element)
+    }
+    scroll_autocomplete_item_into_view()
+  }
 
+  function colon_mode_confirm() {
+    if (autocomplete_candidates.length > 0) {
+      autocomplete_colon_mode = false
+      const current_selection = window.getSelection()!
+      const current_range = current_selection.getRangeAt(0)
+      const input = chat_input_field_element!.innerText
+      const input_before_replacement = input.slice(0, current_range.startOffset - autocomplete_partial.length)
+      const input_after_replacement = input.slice(current_range.startOffset)
+      console.log(autocomplete_candidates)
+      console.log(autocomplete_current_index)
+      const emote_selected = autocomplete_candidates[autocomplete_current_index]
+      chat_input_field_element!.innerText = input_before_replacement + emote_selected + " " + input_after_replacement
+
+      const range = document.createRange()
+      range.setStart(chat_input_field_element!.childNodes[0], input_before_replacement.length + emote_selected.length + 1)
+      range.collapse(true)
+      const selection = window.getSelection()
+      selection!.removeAllRanges()
+      selection!.addRange(range)
+    }
+  }
+
+  function autocomplete_click(e: MouseEvent) {
+    const target = e.currentTarget as HTMLElement
+    autocomplete_current_index = parseInt(target.dataset.index!)
+    const range = document.createRange()
+    range.setStart(chat_input_field_element!.childNodes[0], autocomplete_last_selection_end)
+    range.collapse(true)
+    console.log(autocomplete_last_selection_end)
+    chat_input_field_element!.focus()
+    const selection = window.getSelection()
+    selection!.removeAllRanges()
+    selection!.addRange(range)
+    colon_mode_confirm()
+  }
+
+  function scroll_autocomplete_item_into_view() {
+    const element = document.querySelectorAll(`[data-index="${autocomplete_current_index}"]`)[0]
+    scrollIntoView(element, {
+      scrollMode: "if-needed",
+      block: "nearest",
+      inline: "nearest",
+    })
   }
 
   async function handle_chat_keydown(e: KeyboardEvent) {
-    const input = chat_input_element!.innerText
+    const input = chat_input_field_element!.innerText
     if (e.key === "Enter") {
       e.preventDefault()
-      if (autocomplete_colon_mode) {
+      if (autocomplete_colon_mode && autocomplete_candidates.length > 0) {
         colon_mode_confirm()
         return
       }
       if (input.trim() === "") return
-      console.log(chat_input_element)
-      console.log(input)
-      await send_chat_message({ type: "send_message_v2", message: input.trim(), reply_to_id: chat_replying_to?.id ?? null })
-      chat_input_element!.innerText = ""
+      await send_chat_message({
+        type: "send_message_v2",
+        message: input.trim(),
+        reply_to_id: chat_replying_to?.id ?? null,
+      })
+      chat_input_field_element!.innerText = ""
       chat_replying_to = null
     } else if (e.key === "Tab") {
       e.preventDefault()
@@ -206,17 +301,31 @@
         return
       }
       autocomplete(input)
+    } else if (e.key === "ArrowUp") {
+      if (autocomplete_colon_mode) {
+        e.preventDefault()
+        autocomplete_current_index = (autocomplete_current_index + autocomplete_candidates.length - 1) % autocomplete_candidates.length
+        scroll_autocomplete_item_into_view()
+      }
+    } else if (e.key === "ArrowDown") {
+      if (autocomplete_colon_mode) {
+        e.preventDefault()
+        autocomplete_current_index = (autocomplete_current_index + 1) % autocomplete_candidates.length
+        scroll_autocomplete_item_into_view()
+      }
     } else {
-      autocomplete_partial = ""
-      autocomplete_candidates = []
-      autocomplete_current_index = 0
-      autocomplete_first_tab = true
+      if (!autocomplete_colon_mode) {
+        autocomplete_partial = ""
+        autocomplete_candidates = []
+        autocomplete_current_index = 0
+        autocomplete_first_tab = true
+      }
     }
   }
 
   let autocomplete_partial = ""
-  let autocomplete_candidates: string[] = []
-  let autocomplete_current_index = 0
+  let autocomplete_candidates: string[] = $state([])
+  let autocomplete_current_index = $state(0)
   let autocomplete_first_tab = true
   let autocomplete_last_selection_end = 0
   let autocomplete_colon_mode = $state(false)
@@ -272,11 +381,11 @@
     const input_before_cursor = input.slice(0, input_cursor - backtrack_length)
     const input_after_cursor = input.slice(input_cursor)
     const autocomplete_next_candidate = autocomplete_candidates[autocomplete_current_index]
-    chat_input_element!.innerText = input_before_cursor + autocomplete_next_candidate + " " + input_after_cursor
+    chat_input_field_element!.innerText = input_before_cursor + autocomplete_next_candidate + " " + input_after_cursor
 
     // move cursor to end of autocomplete
     const range = document.createRange()
-    range.setStart(chat_input_element!.childNodes[0], input_before_cursor.length + autocomplete_next_candidate.length + 1)
+    range.setStart(chat_input_field_element!.childNodes[0], input_before_cursor.length + autocomplete_next_candidate.length + 1)
     range.collapse(true)
     const selection = window.getSelection()
     selection!.removeAllRanges()
@@ -295,14 +404,14 @@
 
   function insert_text_at_cursor(text: string) {
     text = text.replace(/\n/g, " ")
-    const input = chat_input_element!.innerText
+    const input = chat_input_field_element!.innerText
     const input_start_offset = window.getSelection()!.getRangeAt(0).startOffset
     const input_end_offset = window.getSelection()!.getRangeAt(0).endOffset
     const input_before_cursor = input.slice(0, input_start_offset)
     const input_after_cursor = input.slice(input_end_offset)
-    chat_input_element!.innerText = input_before_cursor + text + input_after_cursor
+    chat_input_field_element!.innerText = input_before_cursor + text + input_after_cursor
     const range = document.createRange()
-    range.setStart(chat_input_element!.childNodes[0], input_before_cursor.length + text.length)
+    range.setStart(chat_input_field_element!.childNodes[0], input_before_cursor.length + text.length)
     range.collapse(true)
     const selection = window.getSelection()
     selection!.removeAllRanges()
@@ -335,12 +444,12 @@
         if (history_stack.length > 0) {
           e.preventDefault()
           const action = history_stack.pop()!
-          const input = chat_input_element!.innerText
+          const input = chat_input_field_element!.innerText
           const input_before_cursor = input.slice(0, action.start)
           const input_after_cursor = input.slice(action.start + action.length)
-          chat_input_element!.innerText = input_before_cursor + input_after_cursor
+          chat_input_field_element!.innerText = input_before_cursor + input_after_cursor
           const range = document.createRange()
-          range.setStart(chat_input_element!.childNodes[0], action.start)
+          range.setStart(chat_input_field_element!.childNodes[0], action.start)
           range.collapse(true)
           const selection = window.getSelection()
           selection!.removeAllRanges()
@@ -350,22 +459,25 @@
   }
 
   function handle_chat_input() {
-    const input = chat_input_element!.innerText
+    const input = chat_input_field_element!.innerText
     if (input.length > 500) {
-      chat_input_element!.innerText = input.slice(0, 500)
+      chat_input_field_element!.innerText = input.slice(0, 500)
       const range = document.createRange()
-      range.setStart(chat_input_element!, 1)
+      range.setStart(chat_input_field_element!, 1)
       range.collapse(true)
       const selection = window.getSelection()
       selection!.removeAllRanges()
       selection!.addRange(range)
-      chat_input_element!.focus()
+      chat_input_field_element!.focus()
       chat_input_length = 500
     } else {
       chat_input_length = input.length
     }
-    if (chat_input_element!.innerHTML === "<br>") {
-      chat_input_element!.innerHTML = ""
+    if (chat_input_field_element!.innerHTML === "<br>") {
+      chat_input_field_element!.innerHTML = ""
+    }
+    if (autocomplete_first_tab) {
+      colon_mode_input()
     }
   }
 
@@ -395,14 +507,14 @@
   }
 
   function insert_emote(emote: string) {
-    const input = chat_input_element!.textContent ?? ""
+    const input = chat_input_field_element!.textContent ?? ""
     let insert = ""
     if (input !== "" && !input.endsWith(" ")) {
       insert = ` ${emote} `
     } else {
       insert = `${emote} `
     }
-    chat_input_element!.textContent = input + insert
+    chat_input_field_element!.textContent = input + insert
     handle_chat_input()
   }
 
@@ -427,17 +539,33 @@
     chat_replying_to = null
   }
 
-  function on_selection_change(e: Event) {
-    console.log(e)
+  function on_selection_change() {
     const current_selection = window.getSelection()!
+    if (current_selection.anchorNode!.parentNode !== chat_input_field_element) {
+      return
+    }
     const current_range = current_selection.getRangeAt(0)
     if (current_range.endOffset !== autocomplete_last_selection_end) {
       autocomplete_partial = ""
-      autocomplete_candidates = []
-      autocomplete_current_index = 0
-      autocomplete_last_selection_end = 0
       autocomplete_first_tab = true
+      colon_mode_input()
     }
+  }
+
+  let chat_input_element: HTMLDivElement
+  let autocomplete_element: HTMLDivElement | undefined = $state(undefined)
+
+  function position_autocomplete(node: HTMLDivElement) {
+    computePosition(chat_input_element, node, {
+      strategy: "absolute",
+      placement: "top",
+      middleware: [shift(), offset({ mainAxis: 4, crossAxis: -8 })],
+    }).then(({ x, y }) => {
+      Object.assign(node.style, {
+        left: `${x}px`,
+        top: `${y}px`,
+      })
+    })
   }
 
   onMount(() => {
@@ -470,6 +598,7 @@
       height: 65%;
     }
   }
+
   #chat-status {
     height: 2rem;
     width: 100%;
@@ -503,6 +632,7 @@
     gap: 0.25rem;
     flex: 0 0 auto;
     flex-direction: column;
+    position: relative;
   }
 
   #chat-input-area {
@@ -601,6 +731,46 @@
       filter: invert(1) brightness(0.5);
     }
   }
+
+  #chat-autocomplete {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: #333;
+    padding: 0.5rem;
+    margin: 0 0.5rem;
+    border: 1px solid #555;
+    border-radius: 4px;
+    z-index: 1;
+    font-size: 14px;
+    max-height: 200px;
+    overflow-y: scroll;
+    scrollbar-width: none;
+  }
+
+  .chat-autocomplete-item {
+    display: flex;
+    flex-direction: row;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    cursor: pointer;
+    align-items: center;
+    height: calc(32px + 0.5rem);
+
+    &:hover {
+      background-color: #555;
+    }
+  }
+
+  .chat-autocomplete-item-highlighted {
+    background-color: #444;
+  }
+
+  .chat-autocomplete-item-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 </style>
 
 <div id="chat-container">
@@ -649,7 +819,7 @@
       <div id="scroll-to-bottom" onclick={force_scroll_to_bottom}>More messages below</div>
     {/if}
   </div>
-  <div id="chat-input">
+  <div id="chat-input" bind:this={chat_input_element}>
     {#if chat_replying_to}
       <div id="chat-replying-to">
         <span id="chat-replying-to-name">Replying to: @{chat_replying_to.name}</span>
@@ -659,10 +829,25 @@
         </div>
       </div>
     {/if}
+    {#if autocomplete_colon_mode}
+      <div id="chat-autocomplete" use:position_autocomplete bind:this={autocomplete_element}>
+        {#each autocomplete_candidates as candidate, i (candidate)}
+          <div
+            class="chat-autocomplete-item"
+            class:chat-autocomplete-item-highlighted={i === autocomplete_current_index}
+            data-index={i}
+            onclick={autocomplete_click}
+          >
+            <ChatMessageEmote name={candidate} zero_widths={[]} {twitch_emotes} {seventv_emotes} />
+            <span class="chat-autocomplete-item-name">{candidate}</span>
+          </div>
+        {/each}
+      </div>
+    {/if}
     <div id="chat-input-area">
       <span
         id="chat-input-field"
-        bind:this={chat_input_element}
+        bind:this={chat_input_field_element}
         data-placeholder={twitch_logged_in ? "Enter message" : "Login to chat"}
         contenteditable={twitch_logged_in && chat_authenticated && chat_connected ? "true" : "false"}
         onkeydown={handle_chat_keydown}
