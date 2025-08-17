@@ -422,12 +422,12 @@
   function before_chat_input(e: InputEvent) {
     switch (e.inputType) {
       case "insertFromComposition":
-      case "insertFromDrop":
       case "insertFromYank":
       case "insertReplacementText":
       case "insertText":
         history_stack = []
         break
+      case "insertFromDrop":
       case "insertFromPaste":
         if (e.dataTransfer) {
           e.preventDefault()
