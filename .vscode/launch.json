@@ -1,20 +1,20 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "command": "./node_modules/.bin/vite dev",
-            "name": "Vite dev server",
-            "type": "node-terminal",
-            "request": "launch"
-        },
-        {
-            "command": "./node_modules/.bin/vite build && ./node_modules/.bin/wrangler dev",
-            "name": "Wrangler dev env",
-            "type": "node-terminal",
-            "request": "launch"
-        }
-    ]
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "command": "./node_modules/.bin/vite dev",
+      "name": "Vite dev server",
+      "type": "node-terminal",
+      "request": "launch"
+    },
+    {
+      "command": "./node_modules/.bin/vite build && ./node_modules/.bin/wrangler dev",
+      "name": "Wrangler dev env",
+      "type": "node-terminal",
+      "request": "launch"
+    }
+  ]
 }
