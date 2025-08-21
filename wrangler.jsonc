@@ -4,7 +4,7 @@
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "chat-website",
+  "name": "chat-website-dev",
   "main": ".svelte-kit/cloudflare/worker.js",
   "compatibility_date": "2025-07-26",
   "compatibility_flags": ["nodejs_compat"],
