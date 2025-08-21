@@ -12,6 +12,7 @@
   import { computePosition, offset, shift } from "@floating-ui/dom"
   import ChatMessageEmote from "$lib/components/ChatMessageEmote.svelte"
   import scrollIntoView from "scroll-into-view-if-needed"
+  import { env } from "$env/dynamic/public"
 
   type ChatPanelProps = {
     twitch_logged_in: boolean
@@ -84,7 +85,7 @@
     if (chat_ws && chat_connected) {
       chat_ws.close(1000, "reconnection")
     }
-    chat_ws = new WebSocket(`wss://player.sw.arm.fm/chat`)
+    chat_ws = new WebSocket(`wss://${env.PUBLIC_SESSION_DOMAIN}/chat`)
     chat_ws.onopen = async () => {
       chat_connected = true
       add_non_chat_message("notification", "connected to chat server")
