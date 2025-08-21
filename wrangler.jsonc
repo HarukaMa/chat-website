@@ -65,4 +65,27 @@
    * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
    */
   // "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
+
+  "env": {
+    "dev": {
+      "routes": [
+        {
+          "pattern": "dev.player.sw.arm.fm",
+          "custom_domain": true,
+        },
+      ],
+      "vars": {
+        "PUBLIC_TWITCH_CLIENT_ID": "ijg6o5dv2nq9j6g4tcm6mx3p25twbz",
+        "PUBLIC_SESSION_DOMAIN": "player.sw.arm.fm",
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "class_name": "DO",
+            "name": "DO",
+          },
+        ],
+      },
+    },
+  },
 }
