@@ -14,6 +14,7 @@
   import type QualityLevel from "videojs-contrib-quality-levels/dist/types/quality-level"
   import PlayerControlMenu from "$lib/components/PlayerControlMenu.svelte"
   import ChatPanel from "$lib/components/ChatPanel.svelte"
+  import InstanceBanner from "$lib/components/InstanceBanner.svelte"
 
   let { data } = $props()
   let session = $state(data.session)
@@ -378,6 +379,7 @@
 </svelte:head>
 
 <div id="content">
+  <InstanceBanner />
   <div id="header">
     {#if !twitch_logged_in}
       <a id="twitch-login" href={twitch_login_url}>
